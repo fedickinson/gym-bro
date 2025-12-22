@@ -23,8 +23,14 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Data (if you want to keep workout data private)
-# data/*.json  # Uncomment if you don't want to commit your personal workout data
+# Data - Keep personal workout logs private
+data/
+
+# Docs - Development notes and internal documentation
+docs/
+
+# Phase docs - Training phase PDFs
+phase_docs/
 
 # Streamlit
 .streamlit/secrets.toml
