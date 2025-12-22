@@ -68,6 +68,52 @@ with st.sidebar:
         clear_chat_history()
         st.rerun()
 
+    # Dev Mode: Export Logs
+    from src.dev_tools import is_dev_mode, format_chat_logs_as_json, format_chat_logs_as_markdown, generate_filename
+
+    if is_dev_mode():
+        st.divider()
+        st.subheader("🛠️ Dev Tools")
+        st.caption("Debug mode enabled")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Export as JSON
+            if len(st.session_state.chat_history) > 0:
+                json_data = format_chat_logs_as_json(
+                    st.session_state.chat_history,
+                    metadata={
+                        "session_type": "chat",
+                        "total_messages": len(st.session_state.chat_history)
+                    }
+                )
+                st.download_button(
+                    label="📥 JSON",
+                    data=json_data,
+                    file_name=generate_filename("json"),
+                    mime="application/json",
+                    use_container_width=True
+                )
+
+        with col2:
+            # Export as Markdown
+            if len(st.session_state.chat_history) > 0:
+                md_data = format_chat_logs_as_markdown(
+                    st.session_state.chat_history,
+                    metadata={
+                        "session_type": "chat",
+                        "total_messages": len(st.session_state.chat_history)
+                    }
+                )
+                st.download_button(
+                    label="📥 MD",
+                    data=md_data,
+                    file_name=generate_filename("md"),
+                    mime="text/markdown",
+                    use_container_width=True
+                )
+
     st.divider()
 
     # Example questions
@@ -112,13 +158,14 @@ if user_input := st.chat_input("Ask me anything..."):
                 # Display response
                 st.write(response)
 
-                # Add assistant message to history
-                add_chat_message("assistant", response)
+                # Add assistant message to history with metadata
+                # (orchestrator.chat doesn't return agent info, but we can add it later if needed)
+                add_chat_message("assistant", response, agent="orchestrator")
 
             except Exception as e:
                 error_msg = f"Sorry, I encountered an error: {str(e)}"
                 st.error(error_msg)
-                add_chat_message("assistant", error_msg)
+                add_chat_message("assistant", error_msg, error=str(e))
 
     # Rerun to update display
     st.rerun()

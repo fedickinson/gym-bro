@@ -97,18 +97,27 @@ def reset_log_workflow():
     st.session_state.audio_transcription = None
 
 
-def add_chat_message(role: str, content: str):
+def add_chat_message(role: str, content: str, **metadata):
     """
     Add a message to chat history.
 
     Args:
         role: "user" or "assistant"
         content: Message content
+        **metadata: Optional metadata (agent, tool_calls, error, etc.)
     """
-    st.session_state.chat_history.append({
+    from datetime import datetime
+
+    message = {
         "role": role,
-        "content": content
-    })
+        "content": content,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    # Add any additional metadata
+    message.update(metadata)
+
+    st.session_state.chat_history.append(message)
 
 
 def clear_chat_history():
