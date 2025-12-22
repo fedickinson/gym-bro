@@ -8,11 +8,25 @@ A conversational fitness tracking app built with **LangChain**, **LangGraph**, a
 
 ## Features
 
+### Core Features
 - **Natural Language Logging**: "Did push today - bench 135x8, incline 40x10, tricep pushdowns"
+- **Audio Recording**: Record workouts via voice at the gym
 - **Intelligent Queries**: "What's my bench press PR?" / "Compare my squat to deadlift progress"
 - **Smart Recommendations**: "What should I do today?" (considers weekly split, recent workouts, muscle balance)
 - **Progress Tracking**: Visualize trends, PRs, and training balance
 - **Weekly Split Awareness**: Tracks Push/Pull/Legs rotation and suggests based on what's missing
+
+### 🎯 Adaptive Coaching (NEW!)
+- **Pattern Learning**: Learns which exercises you actually do vs skip
+- **Personalized Weights**: Suggests weights based on YOUR progression history
+- **Volume Adjustment**: Matches your typical training volume
+- **Coaching Insights**: Explains WHY each weight is suggested
+- **Progression Tracking**: Detects when to increase, maintain, or deload
+
+### 🛠️ Dev Mode
+- **Chat Log Export**: Export conversations as JSON or Markdown for debugging
+- **Metadata Capture**: Timestamps, agents used, errors for full context
+- See [DEV_MODE.md](DEV_MODE.md) for details
 
 ---
 
@@ -59,8 +73,8 @@ See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 
 ```bash
 # Clone
-git clone https://github.com/yourusername/fitness-coach.git
-cd fitness-coach
+git clone https://github.com/fedickinson/gym-bro.git
+cd gym-bro
 
 # Setup
 python -m venv venv
@@ -68,11 +82,15 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Configure
-export ANTHROPIC_API_KEY=sk-ant-...
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+echo "OPENAI_API_KEY=sk-proj-..." >> .env  # For audio transcription
+echo "DEV_MODE=true" >> .env  # Optional: Enable dev tools
 
 # Run
 streamlit run app.py
 ```
+
+**Live Demo**: [https://gym-bro-o.streamlit.app/](https://gym-bro-o.streamlit.app/)
 
 ---
 
