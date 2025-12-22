@@ -37,3 +37,10 @@ phase_docs/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Conversation Logs - Keep personal conversations private (but include structure/examples)
+conversation_logs/failed/*.json
+conversation_logs/analyzed/*.md
+conversation_logs/fixed/*.json
+conversation_logs/reviews/*.md
+!conversation_logs/examples/

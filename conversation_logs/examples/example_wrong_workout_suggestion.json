@@ -1,0 +1,38 @@
+{
+  "export_timestamp": "2025-12-22T17:00:00.000000",
+  "session_metadata": {
+    "session_type": "chat",
+    "total_messages": 4,
+    "example": true,
+    "issue": "System suggested wrong workout type"
+  },
+  "total_messages": 4,
+  "conversation": [
+    {
+      "index": 0,
+      "role": "user",
+      "content": "What should I do today? It's Friday and I've already done Push on Monday, Pull on Wednesday, and Legs on Thursday this week.",
+      "timestamp": "2025-12-22T16:45:00"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "content": "Great job staying consistent this week! Based on your training split, I'd recommend doing a Push workout today. Focus on compound movements like bench press and overhead press.",
+      "timestamp": "2025-12-22T16:45:08",
+      "agent": "orchestrator"
+    },
+    {
+      "index": 2,
+      "role": "user",
+      "content": "But I already did Push on Monday. Shouldn't I do Upper or Lower instead since I've done Push/Pull/Legs already?",
+      "timestamp": "2025-12-22T16:46:15"
+    },
+    {
+      "index": 3,
+      "role": "assistant",
+      "content": "You're absolutely right! I apologize for the confusion. Since you've completed Push, Pull, and Legs this week, an Upper body workout would be perfect for today. This will give you a full-body split for the week.",
+      "timestamp": "2025-12-22T16:46:22",
+      "agent": "orchestrator"
+    }
+  ]
+}
