@@ -1,0 +1,40 @@
+{
+  "exercises": [
+    {
+      "canonical": "Dumbbell Bench Press",
+      "variations": ["DB Bench", "Dumbbell Press", "DB Press"],
+      "muscle_groups": ["Chest", "Triceps", "Shoulders"],
+      "equipment": ["Dumbbells", "Bench"]
+    },
+    {
+      "canonical": "Squat",
+      "variations": ["Back Squat", "Barbell Squat", "BB Squat"],
+      "muscle_groups": ["Quads", "Glutes", "Core"],
+      "equipment": ["Barbell", "Rack"]
+    },
+    {
+      "canonical": "Lat Pulldown",
+      "variations": ["Wide Grip Pulldown", "Close Grip Pulldown"],
+      "muscle_groups": ["Lats", "Biceps", "Upper Back"],
+      "equipment": ["Cable Machine"]
+    },
+    {
+      "canonical": "Overhead Press",
+      "variations": ["Shoulder Press", "Military Press", "OHP"],
+      "muscle_groups": ["Shoulders", "Triceps", "Core"],
+      "equipment": ["Dumbbells"]
+    },
+    {
+      "canonical": "Dumbbell Row",
+      "variations": ["DB Row", "One Arm Row", "Single Arm Row"],
+      "muscle_groups": ["Lats", "Rhomboids", "Biceps"],
+      "equipment": ["Dumbbells", "Bench"]
+    },
+    {
+      "canonical": "Leg Press",
+      "variations": ["45 Degree Leg Press", "Angled Leg Press"],
+      "muscle_groups": ["Quads", "Glutes", "Hamstrings"],
+      "equipment": ["Leg Press Machine"]
+    }
+  ]
+}

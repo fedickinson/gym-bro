@@ -23,8 +23,11 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Data - Keep personal workout logs private
-data/
+# Data - Keep personal workout logs private (but include templates/exercises)
+data/workout_logs.json
+data/weekly_split.json
+data/raw/
+data/processed/
 
 # Docs - Development notes and internal documentation
 docs/
