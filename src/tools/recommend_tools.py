@@ -1,0 +1,305 @@
+"""
+Recommend Tools - Tools for workout recommendations and planning.
+
+These tools are used by the Recommend Agent (ReAct) to suggest workouts,
+track weekly split completion, and plan training.
+"""
+
+from datetime import date, timedelta
+from langchain_core.tools import tool
+from src.data import (
+    get_all_logs,
+    get_logs_by_date_range,
+    get_template,
+    get_all_templates,
+    get_weekly_split,
+    update_weekly_split
+)
+
+
+@tool
+def get_weekly_split_status() -> dict:
+    """
+    Get current week's workout completion status by type.
+    
+    Returns:
+        Dict with completed counts, targets, remaining, and next suggested workout
+    """
+    split = get_weekly_split()
+    config = split.get("config", {})
+    current = split.get("current_week", {})
+    
+    # Get this week's date range
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())  # Monday
+    week_end = week_start + timedelta(days=6)  # Sunday
+    
+    # Check if we need to reset the week
+    stored_start = current.get("start_date")
+    if stored_start:
+        stored_start_date = date.fromisoformat(stored_start)
+        if stored_start_date < week_start:
+            # New week - reset
+            current = {
+                "start_date": week_start.isoformat(),
+                "completed": {},
+                "next_in_rotation": config.get("rotation", ["Push"])[0]
+            }
+            update_weekly_split({"config": config, "current_week": current})
+    
+    # Get workouts from this week
+    logs = get_logs_by_date_range(week_start, today)
+    
+    # Count by type
+    completed = {}
+    for log in logs:
+        t = log.get("type", "Other")
+        if t in config.get("types", []):
+            completed[t] = completed.get(t, 0) + 1
+    
+    # Calculate remaining
+    targets = config.get("weekly_targets", {})
+    remaining = {}
+    for t, target in targets.items():
+        done = completed.get(t, 0)
+        remaining[t] = max(0, target - done)
+    
+    # Determine next suggested
+    rotation = config.get("rotation", ["Push", "Pull", "Legs"])
+    next_suggested = current.get("next_in_rotation", rotation[0])
+    
+    # If next_suggested is complete for the week, find next incomplete
+    while remaining.get(next_suggested, 0) == 0:
+        try:
+            idx = rotation.index(next_suggested)
+            next_idx = (idx + 1) % len(rotation)
+            next_suggested = rotation[next_idx]
+            # Prevent infinite loop
+            if next_suggested == current.get("next_in_rotation"):
+                break
+        except ValueError:
+            break
+    
+    days_left = (week_end - today).days + 1
+    
+    return {
+        "week_start": week_start.isoformat(),
+        "completed": completed,
+        "targets": targets,
+        "remaining": remaining,
+        "next_suggested": next_suggested,
+        "days_left_in_week": days_left,
+        "summary": _generate_split_summary(completed, targets, remaining)
+    }
+
+
+@tool
+def suggest_next_workout() -> dict:
+    """
+    Suggest the next workout based on rotation and weekly progress.
+    
+    Returns:
+        Suggested workout type with reasoning
+    """
+    status = get_weekly_split_status.invoke({})
+    
+    suggested = status.get("next_suggested", "Push")
+    remaining = status.get("remaining", {})
+    days_left = status.get("days_left_in_week", 7)
+    
+    # Build reasoning
+    reasons = []
+    
+    # Check if behind on this type
+    if remaining.get(suggested, 0) > 0:
+        reasons.append(f"{suggested} is next in rotation")
+        if remaining[suggested] > 1:
+            reasons.append(f"You have {remaining[suggested]} more {suggested} workouts to hit your target")
+    
+    # Check if any types are critically behind
+    urgent = []
+    for t, count in remaining.items():
+        if count > 0 and count >= days_left:
+            urgent.append(t)
+    
+    if urgent and suggested not in urgent:
+        reasons.append(f"Consider prioritizing: {', '.join(urgent)}")
+    
+    # Get template if available
+    template = get_template(suggested.lower())
+    template_id = template.get("id") if template else None
+    template_name = template.get("name") if template else None
+    
+    return {
+        "suggested_type": suggested,
+        "reason": " | ".join(reasons) if reasons else "Next in standard rotation",
+        "template_id": template_id,
+        "template_name": template_name,
+        "weekly_status": status
+    }
+
+
+@tool
+def get_last_workout_by_type(workout_type: str) -> dict:
+    """
+    Get the most recent workout of a specific type.
+    
+    Args:
+        workout_type: The type of workout (Push, Pull, Legs, etc.)
+    
+    Returns:
+        The most recent workout of that type, or None if not found
+    """
+    logs = get_all_logs()
+    
+    # Filter by type and sort by date descending
+    typed_logs = [
+        l for l in logs 
+        if l.get("type", "").lower() == workout_type.lower()
+    ]
+    
+    if not typed_logs:
+        return {
+            "found": False,
+            "type": workout_type,
+            "message": f"No {workout_type} workouts found"
+        }
+    
+    # Sort by date descending
+    typed_logs.sort(key=lambda x: x.get("date", ""), reverse=True)
+    last = typed_logs[0]
+    
+    # Calculate days since
+    last_date = date.fromisoformat(last.get("date"))
+    days_since = (date.today() - last_date).days
+    
+    return {
+        "found": True,
+        "date": last.get("date"),
+        "days_since": days_since,
+        "exercises": [ex.get("name") for ex in last.get("exercises", [])],
+        "notes": last.get("notes")
+    }
+
+
+@tool
+def check_muscle_balance() -> dict:
+    """
+    Analyze if any muscle groups are being under or over trained.
+    
+    Returns:
+        Balance report with counts and recommendations
+    """
+    # Look at last 14 days
+    end_date = date.today()
+    start_date = end_date - timedelta(days=14)
+    logs = get_logs_by_date_range(start_date, end_date)
+    
+    # Count by type
+    counts = {}
+    for log in logs:
+        t = log.get("type", "Other")
+        counts[t] = counts.get(t, 0) + 1
+    
+    # Analyze balance
+    total = sum(counts.values())
+    issues = []
+    
+    if total == 0:
+        return {
+            "period_days": 14,
+            "total_workouts": 0,
+            "balance": "No data - no workouts in last 14 days",
+            "recommendation": "Any workout is a good workout!"
+        }
+    
+    # Check for imbalances
+    push = counts.get("Push", 0) + counts.get("Upper", 0) * 0.5
+    pull = counts.get("Pull", 0) + counts.get("Upper", 0) * 0.5
+    legs = counts.get("Legs", 0) + counts.get("Lower", 0)
+    
+    if push > pull * 1.5:
+        issues.append("More pushing than pulling - add more back work")
+    elif pull > push * 1.5:
+        issues.append("More pulling than pushing - add more chest/shoulder work")
+    
+    if legs < (push + pull) * 0.3:
+        issues.append("Legs are undertrained relative to upper body")
+    
+    balance = "balanced" if not issues else "imbalanced"
+    
+    return {
+        "period_days": 14,
+        "total_workouts": total,
+        "by_type": counts,
+        "balance": balance,
+        "issues": issues,
+        "recommendation": issues[0] if issues else "Keep up the good balance!"
+    }
+
+
+@tool 
+def get_workout_template(workout_type: str) -> dict:
+    """
+    Get the workout template for a given type.
+    
+    Args:
+        workout_type: The type of workout (Push, Pull, Legs, etc.)
+    
+    Returns:
+        Template with exercises, sets, reps, and supersets
+    """
+    template = get_template(workout_type.lower())
+    
+    if not template:
+        # Try to find a template that contains this type
+        all_templates = get_all_templates()
+        for t in all_templates:
+            if workout_type.lower() in t.get("type", "").lower():
+                template = t
+                break
+    
+    if not template:
+        return {
+            "found": False,
+            "type": workout_type,
+            "message": f"No template found for {workout_type}"
+        }
+    
+    return {
+        "found": True,
+        "id": template.get("id"),
+        "name": template.get("name"),
+        "type": template.get("type"),
+        "exercises": template.get("exercises", []),
+        "supersets": template.get("supersets", []),
+        "notes": template.get("notes")
+    }
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _generate_split_summary(completed: dict, targets: dict, remaining: dict) -> str:
+    """Generate a human-readable weekly split summary."""
+    parts = []
+    
+    for t, target in targets.items():
+        done = completed.get(t, 0)
+        if done >= target:
+            parts.append(f"{t}: ✓ {done}/{target}")
+        else:
+            parts.append(f"{t}: {done}/{target}")
+    
+    return " | ".join(parts)
+
+
+# Export all tools for the agent
+RECOMMEND_TOOLS = [
+    get_weekly_split_status,
+    suggest_next_workout,
+    get_last_workout_by_type,
+    check_muscle_balance,
+    get_workout_template
+]

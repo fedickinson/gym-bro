@@ -1,0 +1,14 @@
+[theme]
+primaryColor = "#4CAF50"             # Green for success/progress
+backgroundColor = "#0E1117"           # Dark background
+secondaryBackgroundColor = "#1E1E1E" # Slightly lighter for cards
+textColor = "#FAFAFA"                # Light text
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
