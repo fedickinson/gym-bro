@@ -14,7 +14,7 @@ from src.data import get_all_logs, get_logs_by_date_range, delete_log
 st.set_page_config(
     page_title="History - Gym Bro",
     page_icon="📅",
-    layout="wide"
+    layout="centered"  # Centered for better desktop UX
 )
 
 # Initialize session state
@@ -23,6 +23,31 @@ init_session_state()
 # Render bottom navigation
 st.session_state.current_page = 'History'
 render_bottom_nav('History')
+
+# Desktop optimizations
+st.markdown("""
+<style>
+@media (min-width: 769px) {
+    /* Hide bottom nav on desktop */
+    .bottom-nav {
+        display: none !important;
+    }
+
+    /* Better spacing */
+    .main .block-container {
+        padding: 2rem 2rem !important;
+        max-width: 1000px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Mobile padding with space for bottom nav */
+    .main .block-container {
+        padding: 1rem 1rem 5rem 1rem !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================================
 # Page Content

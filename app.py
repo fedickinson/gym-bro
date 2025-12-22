@@ -17,7 +17,7 @@ from src.data import get_all_logs
 st.set_page_config(
     page_title="Gym Bro - AI Fitness Coach",
     page_icon="🏋️",
-    layout="wide",
+    layout="centered",  # Centered for better desktop UX
     initial_sidebar_state="auto"
 )
 
@@ -34,6 +34,25 @@ render_bottom_nav('Home')
 
 st.markdown("""
 <style>
+/* Desktop optimizations (default) */
+@media (min-width: 769px) {
+    /* Hide bottom nav on desktop (use sidebar instead) */
+    .bottom-nav {
+        display: none !important;
+    }
+
+    /* Better spacing for desktop */
+    .main .block-container {
+        padding: 2rem 2rem !important;
+        max-width: 1200px !important;
+    }
+
+    /* Slightly smaller buttons on desktop */
+    .huge-button > div > div > div > button {
+        height: 80px !important;
+    }
+}
+
 /* Mobile optimizations */
 @media (max-width: 768px) {
     /* Reduce padding on mobile */
@@ -87,6 +106,23 @@ st.markdown("""
     padding: 1rem;
     margin-bottom: 1rem;
     border: 1px solid #333;
+}
+
+/* Desktop improvements */
+@media (min-width: 769px) {
+    /* Better header sizing */
+    h1 {
+        font-size: 2.5rem !important;
+    }
+
+    h2 {
+        font-size: 1.8rem !important;
+    }
+
+    /* Better metric display */
+    [data-testid="stMetricValue"] {
+        font-size: 32px !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)

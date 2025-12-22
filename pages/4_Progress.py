@@ -33,6 +33,23 @@ init_session_state()
 st.session_state.current_page = 'Progress'
 render_bottom_nav('Progress')
 
+# Desktop optimizations
+st.markdown("""
+<style>
+@media (min-width: 769px) {
+    /* Hide bottom nav on desktop */
+    .bottom-nav {
+        display: none !important;
+    }
+
+    /* Better spacing */
+    .main .block-container {
+        padding: 2rem 2rem !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ============================================================================
 # Page Content
 # ============================================================================
