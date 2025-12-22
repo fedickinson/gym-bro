@@ -239,18 +239,50 @@ def check_muscle_balance() -> dict:
 
 
 @tool 
-def get_workout_template(workout_type: str) -> dict:
+def get_workout_template(workout_type: str, adaptive: bool = True) -> dict:
     """
     Get the workout template for a given type.
-    
+
+    NEW: Now supports adaptive template generation based on training history!
+
     Args:
         workout_type: The type of workout (Push, Pull, Legs, etc.)
-    
+        adaptive: Use adaptive templates (default: True). Set to False for static templates.
+
     Returns:
-        Template with exercises, sets, reps, and supersets
+        Template with exercises, sets, reps, and (if adaptive) personalized weights and coaching notes.
+        Includes "mode" field: "adaptive", "static", or "error"
     """
+    from src.agents.template_generator import generate_adaptive_template
+    from datetime import date, timedelta
+
+    # Check if user has enough history for adaptive templates
+    workout_count = 0
+    if adaptive:
+        # Count recent workouts to ensure there's enough data
+        try:
+            from src.data import get_all_logs
+            logs = get_all_logs()
+            # Filter for this workout type
+            type_logs = [log for log in logs if log.get('type') == workout_type]
+            workout_count = len(type_logs)
+        except Exception:
+            workout_count = 0
+
+    # Try adaptive template if enabled and enough data exists
+    if adaptive and workout_count >= 5:
+        try:
+            template = generate_adaptive_template(workout_type)
+            if not template.get("error"):
+                template["found"] = True
+                return template
+        except Exception as e:
+            # Fallback to static if adaptive generation fails
+            print(f"Adaptive template generation failed: {e}")
+
+    # Fallback: Static template
     template = get_template(workout_type.lower())
-    
+
     if not template:
         # Try to find a template that contains this type
         all_templates = get_all_templates()
@@ -258,14 +290,15 @@ def get_workout_template(workout_type: str) -> dict:
             if workout_type.lower() in t.get("type", "").lower():
                 template = t
                 break
-    
+
     if not template:
         return {
             "found": False,
             "type": workout_type,
-            "message": f"No template found for {workout_type}"
+            "message": f"No template found for {workout_type}",
+            "mode": "error"
         }
-    
+
     return {
         "found": True,
         "id": template.get("id"),
@@ -273,7 +306,8 @@ def get_workout_template(workout_type: str) -> dict:
         "type": template.get("type"),
         "exercises": template.get("exercises", []),
         "supersets": template.get("supersets", []),
-        "notes": template.get("notes")
+        "notes": template.get("notes"),
+        "mode": "static"
     }
 
 

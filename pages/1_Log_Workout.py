@@ -43,23 +43,55 @@ def render_ready_state():
     st.caption("Record your workout via voice or type it out")
 
     # Show template reference (collapsible)
-    with st.expander("📋 Template Reference (Tap to View)", expanded=False):
+    with st.expander("📋 Your Personalized Workout (Tap to View)", expanded=False):
         try:
             suggestion = suggest_next_workout.invoke({})
             suggested_type = suggestion.get('suggested_type', 'Push')
 
-            st.info(f"**Suggested:** {suggested_type}")
+            st.success(f"**Suggested:** {suggested_type}")
             st.caption(f"*{suggestion.get('reason', '')}*")
 
-            # Get template for suggested type
-            template = get_workout_template.invoke({"workout_type": suggested_type})
+            # Get template for suggested type (adaptive by default)
+            template = get_workout_template.invoke({"workout_type": suggested_type, "adaptive": True})
 
-            if template:
-                st.subheader(f"{suggested_type} Template")
+            if template and template.get('found'):
+                # Show mode indicator
+                mode = template.get('mode', 'static')
+                if mode == 'adaptive':
+                    st.info("✨ **Personalized** based on your training history")
+
+                    # Show adaptations made
+                    if template.get('adaptations'):
+                        with st.expander("🔍 What Changed?", expanded=False):
+                            for adaptation in template['adaptations']:
+                                st.write(f"• {adaptation}")
+
+                    # Show coaching notes
+                    if template.get('coaching_notes'):
+                        for note in template['coaching_notes']:
+                            st.warning(note)
+
+                # Display exercises with details
+                st.subheader(f"{suggested_type} Workout")
+
                 for ex in template.get('exercises', []):
-                    target_sets = ex.get('target_sets', 3)
-                    target_reps = ex.get('target_reps', 10)
-                    st.write(f"• {ex.get('name')}: {target_sets} sets × {target_reps} reps")
+                    with st.expander(f"**{ex.get('name')}**", expanded=False):
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            target_sets = ex.get('target_sets', 3)
+                            target_reps = ex.get('target_reps', 10)
+                            st.metric("Sets × Reps", f"{target_sets} × {target_reps}")
+
+                        with col2:
+                            suggested_weight = ex.get('suggested_weight_lbs')
+                            if suggested_weight:
+                                st.metric("Suggested Weight", f"{suggested_weight:.0f} lbs")
+
+                        # Show reasoning for adaptive templates
+                        if mode == 'adaptive' and ex.get('reasoning'):
+                            st.caption(f"💡 {ex['reasoning']}")
+
             else:
                 st.caption("No template found for this workout type")
 

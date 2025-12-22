@@ -244,23 +244,41 @@ def get_last_workout() -> Optional[dict]:
     return max(logs, key=lambda x: x.get("date", ""))
 
 def get_exercise_history(exercise_name: str, days: int = 90) -> list:
-    """Get weight/rep history for an exercise."""
-    end = date.today()
-    start = end - timedelta(days=days)
-    
-    logs = get_logs_by_exercise(exercise_name)
-    history = []
-    
-    for log in sorted(logs, key=lambda x: x.get("date", "")):
-        log_date_str = log.get("date")
-        if not log_date_str:
-            continue
-        try:
-            log_date = date.fromisoformat(log_date_str)
-            if log_date < start:
+    """
+    Get weight/rep history for an exercise.
+
+    Args:
+        exercise_name: Name of exercise (partial match)
+        days: Number of days to look back (0 = all time)
+
+    Returns:
+        List of exercise history with date, max_weight, sets
+    """
+    if days == 0:
+        # Get all logs (no date filtering)
+        logs = get_logs_by_exercise(exercise_name)
+    else:
+        # Filter by date range
+        end = date.today()
+        start = end - timedelta(days=days)
+        logs = get_logs_by_exercise(exercise_name)
+
+        filtered_logs = []
+        for log in logs:
+            log_date_str = log.get("date")
+            if not log_date_str:
                 continue
-        except ValueError:
-            continue
+            try:
+                log_date = date.fromisoformat(log_date_str)
+                if log_date >= start:
+                    filtered_logs.append(log)
+            except ValueError:
+                continue
+        logs = filtered_logs
+
+    history = []
+
+    for log in sorted(logs, key=lambda x: x.get("date", "")):
             
         for exercise in log.get("exercises", []):
             if exercise_name.lower() in exercise.get("name", "").lower():
