@@ -50,6 +50,14 @@ class WorkoutLog(BaseModel):
     completed: bool = True
     created_at: datetime = Field(default_factory=datetime.now)
 
+    # Phase 6: Session-based workout tracking (plan vs actual)
+    session_id: str | None = None
+    suggested_type: str | None = None  # What AI originally suggested
+    planned_template_id: str | None = None  # ID of planned template
+    plan_adjustments: list[dict] | None = None  # Chat modifications to plan
+    deviations_detected: list[dict] | None = None  # Exercises that deviated from plan
+    equipment_unavailable: list[str] | None = None  # Equipment constraints during session
+
 
 # ============================================================================
 # Template Models

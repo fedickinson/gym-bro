@@ -200,6 +200,8 @@ def accumulate_exercise(state: SessionWorkoutState) -> SessionWorkoutState:
 def save_session_workout(state: SessionWorkoutState) -> SessionWorkoutState:
     """
     Save the complete workout session to workout_logs.json.
+
+    Handles both SessionWorkoutState and SessionWithPlanState.
     """
     session_id = state.get("session_id")
     intended_type = state.get("intended_type")
@@ -216,11 +218,33 @@ def save_session_workout(state: SessionWorkoutState) -> SessionWorkoutState:
         # Create workout log
         workout_log = {
             "date": date.today().isoformat(),
-            "type": intended_type,  # For Phase 1, use intended type as-is
+            "type": state.get("actual_workout_type") or intended_type,  # Use actual type if available
             "exercises": exercises,
             "notes": f"Session logged incrementally (Session ID: {session_id})",
             "completed": True
         }
+
+        # Phase 6: Add session metadata if SessionWithPlanState
+        if "suggested_type" in state:  # SessionWithPlanState
+            workout_log["session_id"] = session_id
+            workout_log["suggested_type"] = state.get("suggested_type")
+
+            # Save planned template info
+            planned_template = state.get("planned_template", {})
+            if planned_template.get("id"):
+                workout_log["planned_template_id"] = planned_template.get("id")
+
+            # Save plan adjustments (chat modifications)
+            if state.get("plan_adjustments"):
+                workout_log["plan_adjustments"] = state.get("plan_adjustments")
+
+            # Collect deviations detected during session
+            # Note: We'd need to track these throughout the session
+            # For now, just note if there were any major deviations
+
+            # Save equipment constraints
+            if state.get("equipment_unavailable"):
+                workout_log["equipment_unavailable"] = state.get("equipment_unavailable")
 
         # Save to data store
         log_id = add_log(workout_log)

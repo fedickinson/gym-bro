@@ -98,21 +98,47 @@ def render_workout_review(session: dict):
     Render the full workout review before saving.
 
     Args:
-        session: Workout session dict with accumulated_exercises
+        session: Workout session dict with accumulated_exercises (SessionWithPlanState)
     """
     st.title("📋 Review Your Workout")
 
     accumulated_exercises = session.get('accumulated_exercises', [])
-    intended_type = session.get('intended_type', 'Unknown')
+    intended_type = session.get('intended_type') or session.get('actual_workout_type', 'Unknown')
 
     if not accumulated_exercises:
         st.warning("No exercises recorded yet")
         return
 
+    # Phase 6: Show plan vs actual comparison if available
+    suggested_type = session.get('suggested_type')
+    actual_type = session.get('actual_workout_type')
+
     # Show workout summary
-    st.subheader(f"{intended_type} Workout")
+    st.subheader(f"{actual_type or intended_type} Workout")
+
+    # Plan vs Actual indicator
+    if suggested_type and actual_type and suggested_type != actual_type:
+        st.warning(f"⚠️ **Deviated from plan:** Originally suggested {suggested_type}, completed {actual_type}")
+    elif suggested_type:
+        st.success(f"✅ **Followed plan:** {suggested_type} workout as suggested")
+
     st.caption(f"Started: {session.get('started_at', 'Unknown')}")
-    st.caption(f"{len(accumulated_exercises)} exercises")
+    st.caption(f"{len(accumulated_exercises)} exercises completed")
+
+    # Show plan adjustments if any
+    plan_adjustments = session.get('plan_adjustments', [])
+    if plan_adjustments:
+        with st.expander(f"📝 Plan Modifications ({len(plan_adjustments)})", expanded=False):
+            for adj in plan_adjustments:
+                if adj.get('adaptation'):
+                    st.info(f"🔄 **Adapted:** {adj.get('ai_response', 'Plan adapted mid-workout')}")
+                else:
+                    st.caption(f"💬 {adj.get('user_message', 'Modified')}: {adj.get('ai_response', '')[:80]}...")
+
+    # Show equipment constraints if any
+    equipment_unavailable = session.get('equipment_unavailable')
+    if equipment_unavailable:
+        st.caption(f"⚠️ Equipment unavailable: {', '.join(equipment_unavailable)}")
 
     # List all exercises
     st.divider()
