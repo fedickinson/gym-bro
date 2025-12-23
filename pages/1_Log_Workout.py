@@ -413,6 +413,7 @@ def render_session_start_state():
 def render_session_active_state():
     """Render exercise recording screen for session mode."""
     from src.ui.session_components import render_session_progress
+    from src.ui.suggestion_components import render_next_suggestion, render_suggestion_prompt
 
     st.title("🎙️ Record Exercise")
 
@@ -421,6 +422,13 @@ def render_session_active_state():
         render_session_progress(st.session_state.workout_session)
 
     st.divider()
+
+    # Phase 2: Auto-show next exercise suggestion
+    if st.session_state.workout_session:
+        next_suggestion = st.session_state.workout_session.get('next_suggestion')
+        if next_suggestion:
+            render_next_suggestion(next_suggestion)
+            render_suggestion_prompt()
 
     # Record exercise input
     workout_input = combined_input()
@@ -511,7 +519,7 @@ def render_session_exercise_preview():
 
     # Handle button clicks
     if record_next_clicked:
-        from src.agents.session_graph import accumulate_exercise
+        from src.agents.session_graph import accumulate_exercise, refresh_next_suggestion
 
         # Accumulate current exercise
         session['user_action'] = 'add_another'
@@ -520,6 +528,9 @@ def render_session_exercise_preview():
         # CRITICAL FIX: Clear user_action so next parse doesn't auto-accumulate
         updated_session['user_action'] = None
         updated_session['response'] = None  # Also clear response to avoid confusion
+
+        # Phase 2: Refresh next suggestion after accumulating
+        updated_session = refresh_next_suggestion(updated_session)
 
         st.session_state.workout_session = updated_session
 

@@ -65,6 +65,14 @@ class SessionWithPlanState(TypedDict):
     current_exercise_input: str | None
     current_parsed_exercise: dict | None
 
+    # AI Suggestions (Phase 2)
+    next_suggestion: dict | None
+    # {
+    #   source: "plan" | "adaptive",
+    #   exercise_name, target_sets, target_reps,
+    #   suggested_weight_lbs, reasoning, plan_index
+    # }
+
     # User actions
     user_action: Literal["add_another", "finish", "cancel", "adapt_plan", "continue_plan"] | None
 
@@ -165,12 +173,16 @@ def accumulate_exercise(state: SessionWorkoutState) -> SessionWorkoutState:
     accumulated = state.get("accumulated_exercises", []).copy()
     accumulated.append(current_exercise)
 
+    # Increment exercise index (for SessionWithPlanState)
+    new_index = state.get("current_exercise_index", 0) + 1
+
     # Update last activity time
     # Note: We'll persist to disk here in the actual implementation
 
     return {
         **state,
         "accumulated_exercises": accumulated,
+        "current_exercise_index": new_index,
         "current_exercise_input": None,  # Clear for next exercise
         "current_parsed_exercise": None,
         "response": f"Added exercise: {current_exercise.get('name')}"
@@ -359,6 +371,43 @@ def process_planning_chat(state: SessionWithPlanState, user_message: str) -> Ses
 
 
 # ============================================================================
+# Suggestion Node Functions (Phase 2)
+# ============================================================================
+
+def generate_next_suggestion(state: SessionWithPlanState) -> SessionWithPlanState:
+    """
+    Generate AI-powered suggestion for the next exercise.
+
+    Called after accumulating an exercise to provide guidance for what's next.
+
+    Args:
+        state: Current SessionWithPlanState
+
+    Returns:
+        Updated state with next_suggestion populated
+    """
+    from src.agents.suggestion_engine import suggest_next_exercise
+
+    try:
+        # Generate suggestion based on plan and progress
+        suggestion = suggest_next_exercise(state, source="auto")
+
+        return {
+            **state,
+            "next_suggestion": suggestion,
+            "last_activity_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        # On error, return state with no suggestion
+        return {
+            **state,
+            "next_suggestion": None,
+            "response": f"Could not generate suggestion: {str(e)}"
+        }
+
+
+# ============================================================================
 # Routing Functions
 # ============================================================================
 
@@ -534,6 +583,7 @@ def initialize_planning_session() -> dict:
         "current_exercise_index": 0,
         "current_exercise_input": None,
         "current_parsed_exercise": None,
+        "next_suggestion": None,  # Phase 2: AI suggestions
         "user_action": None,
         "saved": False,
         "workout_id": None,
@@ -542,6 +592,9 @@ def initialize_planning_session() -> dict:
 
     # Call initialize_planning to populate with AI recommendation
     result = initialize_planning(initial_state)
+
+    # Generate initial suggestion (first exercise from plan)
+    result = generate_next_suggestion(result)
 
     return result
 
@@ -558,4 +611,23 @@ def modify_plan_via_chat(session_state: dict, user_message: str) -> dict:
         Updated session state with modified template
     """
     result = process_planning_chat(session_state, user_message)
+
+    # Regenerate suggestion with updated plan
+    result = generate_next_suggestion(result)
+
     return result
+
+
+def refresh_next_suggestion(session_state: dict) -> dict:
+    """
+    Refresh the next exercise suggestion.
+
+    Call this after accumulating an exercise or when user needs a new suggestion.
+
+    Args:
+        session_state: Current SessionWithPlanState
+
+    Returns:
+        Updated state with refreshed next_suggestion
+    """
+    return generate_next_suggestion(session_state)
