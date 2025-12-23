@@ -133,6 +133,8 @@ def parse_notes(state: LogWorkoutState) -> LogWorkoutState:
     print("\n🔍 Parsing workout notes...")
 
     # Set up LLM and parser
+    # Note: Tested Haiku (47% accuracy) - too many JSON formatting issues
+    # Keeping Sonnet for reliable parsing
     llm = ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0)
     parser = PydanticOutputParser(pydantic_object=ParsedWorkout)
 

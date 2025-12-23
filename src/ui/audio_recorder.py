@@ -11,6 +11,7 @@ import tempfile
 import openai
 from pathlib import Path
 import os
+from src.ui.loading_overlay import show_loading_overlay, hide_loading_overlay
 
 
 def record_and_transcribe() -> str | None:
@@ -62,35 +63,46 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
             tmp_path = tmp_file.name
 
         # Transcribe with Whisper API
-        with st.spinner("🔄 Transcribing audio..."):
-            client = openai.OpenAI()
+        # Show loading overlay (Step 1 of 2)
+        show_loading_overlay(
+            step=1,
+            total=2,
+            message="Transcribing your audio... 🎙️"
+        )
 
-            with open(tmp_path, "rb") as audio_file:
-                transcription = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    language="en"
-                )
+        client = openai.OpenAI()
 
-            transcribed_text = transcription.text
+        with open(tmp_path, "rb") as audio_file:
+            transcription = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="en"
+            )
 
-            # Check if transcription is empty
-            if not transcribed_text.strip():
-                st.error("❌ Couldn't hear anything - try speaking louder")
-                return None
+        transcribed_text = transcription.text
 
-            # Show what was heard
-            st.success("✅ Transcription complete!")
-            st.info(f"**You said:** {transcribed_text}")
+        # Hide overlay
+        hide_loading_overlay()
 
-            return transcribed_text
+        # Check if transcription is empty
+        if not transcribed_text.strip():
+            st.error("❌ Couldn't hear anything - try speaking louder")
+            return None
+
+        # Show what was heard
+        st.success("✅ Transcription complete!")
+        st.info(f"**You said:** {transcribed_text}")
+
+        return transcribed_text
 
     except openai.APIError as e:
+        hide_loading_overlay()
         st.error(f"❌ OpenAI API error: {str(e)}")
         st.warning("💡 Try typing your workout instead (see below)")
         return None
 
     except Exception as e:
+        hide_loading_overlay()
         st.error(f"❌ Transcription failed: {str(e)}")
         st.warning("💡 Try typing your workout instead (see below)")
         return None

@@ -13,6 +13,7 @@ import streamlit as st
 from src.ui.session import init_session_state, reset_log_workflow
 from src.ui.navigation import render_bottom_nav
 from src.ui.audio_recorder import combined_input
+from src.ui.loading_overlay import show_loading_overlay, hide_loading_overlay
 from src.agents.log_graph import start_workout_log, continue_workout_log
 from src.tools.recommend_tools import suggest_next_workout, get_workout_template
 
@@ -131,16 +132,29 @@ def render_ready_state():
     # Continue button
     if workout_input:
         if st.button("Continue →", type="primary", key="continue_btn"):
-            # Start the log workflow
-            with st.spinner("🔄 Parsing your workout..."):
-                try:
-                    workflow_state = start_workout_log(workout_input)
-                    st.session_state.log_workflow_state = workflow_state
-                    st.session_state.log_state = 'preview'
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Failed to parse workout: {str(e)}")
-                    st.caption("Please try again or adjust your input")
+            try:
+                # Show loading overlay (Step 2 of 2)
+                show_loading_overlay(
+                    step=2,
+                    total=2,
+                    message="Understanding your workout... 🧠"
+                )
+
+                # Start the log workflow
+                workflow_state = start_workout_log(workout_input)
+
+                # Hide overlay before rerun
+                hide_loading_overlay()
+
+                # Update state and rerun
+                st.session_state.log_workflow_state = workflow_state
+                st.session_state.log_state = 'preview'
+                st.rerun()
+
+            except Exception as e:
+                hide_loading_overlay()
+                st.error(f"❌ Failed to parse workout: {str(e)}")
+                st.caption("Please try again or adjust your input")
 
 
 def render_preview_state():
@@ -281,28 +295,38 @@ def render_saved_state():
 
 def save_workout(choice: str, edit_instructions: str = None):
     """Continue workflow with user choice"""
-    with st.spinner("💾 Saving..."):
-        try:
-            final_state = continue_workout_log(
-                state=st.session_state.log_workflow_state,
-                user_choice=choice,
-                edit_instructions=edit_instructions
-            )
+    try:
+        # Show loading overlay
+        show_loading_overlay(
+            step=1,
+            total=1,
+            message="Saving your workout... 💾"
+        )
 
-            st.session_state.log_workflow_state = final_state
+        final_state = continue_workout_log(
+            state=st.session_state.log_workflow_state,
+            user_choice=choice,
+            edit_instructions=edit_instructions
+        )
 
-            if choice == "approve" or (choice == "edit" and final_state.get('saved')):
-                st.session_state.log_state = 'saved'
-            else:
-                # Re-parse if edited
-                st.session_state.log_state = 'preview'
+        # Hide overlay
+        hide_loading_overlay()
 
-            st.session_state.edit_mode = False
-            st.rerun()
+        st.session_state.log_workflow_state = final_state
 
-        except Exception as e:
-            st.error(f"❌ Failed to save: {str(e)}")
-            st.caption("Please try again")
+        if choice == "approve" or (choice == "edit" and final_state.get('saved')):
+            st.session_state.log_state = 'saved'
+        else:
+            # Re-parse if edited
+            st.session_state.log_state = 'preview'
+
+        st.session_state.edit_mode = False
+        st.rerun()
+
+    except Exception as e:
+        hide_loading_overlay()
+        st.error(f"❌ Failed to save: {str(e)}")
+        st.caption("Please try again")
 
 
 def cancel_workflow():
