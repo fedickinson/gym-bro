@@ -117,6 +117,7 @@ def render_planning_chat_state():
     from src.ui.planning_components import render_start_workout_button
     if render_start_workout_button():
         # Lock plan and begin workout
+        st.session_state.recording_mode = None  # Reset recording mode for first exercise
         st.session_state.log_state = 'session_active'
         st.rerun()
 
@@ -134,7 +135,7 @@ def render_session_start_state():
 def render_session_active_state():
     """Render exercise recording screen for session mode."""
     from src.ui.session_components import render_session_progress
-    from src.ui.suggestion_components import render_next_suggestion, render_suggestion_prompt
+    from src.ui.suggestion_components import render_next_suggestion
 
     st.title("🎙️ Record Exercise")
 
@@ -144,58 +145,101 @@ def render_session_active_state():
 
     st.divider()
 
-    # Phase 2: Auto-show next exercise suggestion
-    if st.session_state.workout_session:
-        next_suggestion = st.session_state.workout_session.get('next_suggestion')
-        if next_suggestion:
-            render_next_suggestion(next_suggestion)
-            render_suggestion_prompt()
+    # Show next exercise suggestion
+    next_suggestion = st.session_state.workout_session.get('next_suggestion') if st.session_state.workout_session else None
 
-    # Record exercise input
-    workout_input = combined_input()
+    if next_suggestion and next_suggestion.get('exercise_name'):
+        # We have a suggestion - show it
+        render_next_suggestion(next_suggestion)
+        st.divider()
 
-    # CRITICAL: Force break from column context (Risk Mitigation #1)
-    st.container()
+        # Show two-button flow
+        st.subheader("How would you like to record?")
 
-    # Auto-parse when input provided
-    if workout_input:
-        try:
-            from src.agents.session_graph import add_exercise_to_session
+        col1, col2 = st.columns(2)
 
-            with st.spinner("Parsing exercise..."):
-                # Parse and add to session
-                updated_session = add_exercise_to_session(
-                    st.session_state.workout_session,
-                    workout_input
-                )
-
-            # Store raw input for potential editing
-            st.session_state.raw_exercise_input = workout_input
-
-            # Clear cached transcription
-            if 'cached_transcription' in st.session_state:
-                del st.session_state.cached_transcription
-
-            # Update session state
-            st.session_state.workout_session = updated_session
-
-            # Check if parsing succeeded
-            if updated_session.get('current_parsed_exercise'):
-                # Move to preview state
-                st.session_state.log_state = 'session_exercise_preview'
+        with col1:
+            if st.button("✅ I Did This Exercise", key="did_suggested_btn", use_container_width=True, type="primary"):
+                st.session_state.recording_mode = 'suggested'
                 st.rerun()
-            else:
-                # Parsing failed - show helpful error
-                error_msg = updated_session.get('response', 'Could not parse exercise')
-                st.error(f"❌ {error_msg}")
 
-                # Show example if exercise name was missing
-                if "exercise name" in error_msg.lower():
-                    st.info("💡 **Example:** Say 'Bench press, 3 sets of 10 reps at 135 pounds' or use the text box below")
+        with col2:
+            if st.button("🔄 Different Exercise", key="did_different_btn", use_container_width=True):
+                st.session_state.recording_mode = 'different'
+                st.rerun()
 
-        except Exception as e:
-            st.error(f"❌ Failed to parse exercise: {str(e)}")
-            st.caption("Please try again or use the text input below to correct it")
+    else:
+        # No suggestion available - skip straight to 'different' mode
+        if st.session_state.recording_mode is None:
+            st.session_state.recording_mode = 'different'
+
+    # Show recorder if mode is selected
+    if st.session_state.recording_mode:
+        st.divider()
+
+        # Show appropriate prompt based on mode
+        if st.session_state.recording_mode == 'suggested' and next_suggestion:
+            suggested_name = next_suggestion.get('exercise_name')
+            st.info(f"💡 Recording **{suggested_name}** - just say the sets, reps, and weights")
+            st.caption("Example: '135 for 10, 8, 7' or '3 sets of 10 at 135'")
+        else:
+            st.info("💡 Describe the full exercise with name, sets, reps, and weight")
+            st.caption("Example: 'Dumbbell press, 3 sets of 10 at 50 pounds'")
+
+        # Record exercise input
+        workout_input = combined_input()
+
+        # CRITICAL: Force break from column context
+        st.container()
+
+        # Auto-parse when input provided
+        if workout_input:
+            try:
+                from src.agents.session_graph import add_exercise_to_session
+
+                with st.spinner("Parsing exercise..."):
+                    # Build context for parser
+                    parse_context = {}
+                    if st.session_state.recording_mode == 'suggested' and next_suggestion:
+                        parse_context['suggested_exercise'] = next_suggestion.get('exercise_name')
+
+                    # Parse and add to session
+                    updated_session = add_exercise_to_session(
+                        st.session_state.workout_session,
+                        workout_input,
+                        context=parse_context
+                    )
+
+                # Store raw input for potential editing
+                st.session_state.raw_exercise_input = workout_input
+
+                # Clear cached transcription
+                if 'cached_transcription' in st.session_state:
+                    del st.session_state.cached_transcription
+
+                # Reset recording mode for next exercise
+                st.session_state.recording_mode = None
+
+                # Update session state
+                st.session_state.workout_session = updated_session
+
+                # Check if parsing succeeded
+                if updated_session.get('current_parsed_exercise'):
+                    # Move to preview state
+                    st.session_state.log_state = 'session_exercise_preview'
+                    st.rerun()
+                else:
+                    # Parsing failed - show helpful error
+                    error_msg = updated_session.get('response', 'Could not parse exercise')
+                    st.error(f"❌ {error_msg}")
+
+                    # Show example if exercise name was missing
+                    if "exercise name" in error_msg.lower():
+                        st.info("💡 **Example:** Say 'Bench press, 3 sets of 10 reps at 135 pounds' or use the text box below")
+
+            except Exception as e:
+                st.error(f"❌ Failed to parse exercise: {str(e)}")
+                st.caption("Please try again or use the text input below to correct it")
 
     # Cancel session button
     st.divider()
@@ -309,6 +353,9 @@ def render_session_exercise_preview():
         if 'audio_recorder_key' not in st.session_state:
             st.session_state.audio_recorder_key = 0
         st.session_state.audio_recorder_key += 1
+
+        # Reset recording mode so user sees button options again
+        st.session_state.recording_mode = None
 
         # Go back to active state
         st.session_state.log_state = 'session_active'

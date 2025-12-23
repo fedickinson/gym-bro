@@ -660,18 +660,28 @@ def start_session(intended_type: str) -> dict:
     }
 
 
-def add_exercise_to_session(session_state: dict, exercise_input: str) -> dict:
+def add_exercise_to_session(session_state: dict, exercise_input: str, context: dict = None) -> dict:
     """
     Parse and add an exercise to the session.
 
     Args:
         session_state: Current session state (SessionWithPlanState)
         exercise_input: Raw exercise input (from voice or text)
+        context: Optional parsing context with keys:
+            - suggested_exercise: Exercise name to use if not in input
 
     Returns:
         Updated session state with parsed exercise
     """
-    # Update state with new input
+    # Pre-process input if exercise name is suggested
+    if context and context.get('suggested_exercise'):
+        suggested_exercise = context['suggested_exercise']
+        # Check if input already mentions the exercise
+        if suggested_exercise.lower() not in exercise_input.lower():
+            # Prepend exercise name to input
+            exercise_input = f"{suggested_exercise}, {exercise_input}"
+
+    # Update state with processed input
     session_state["current_exercise_input"] = exercise_input
 
     # Build graph and invoke

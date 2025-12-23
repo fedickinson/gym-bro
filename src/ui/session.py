@@ -69,6 +69,13 @@ def init_session_state():
         #     ...
         # }
 
+    if 'recording_mode' not in st.session_state:
+        st.session_state.recording_mode = None  # None | 'suggested' | 'different'
+        # Controls how parser interprets input:
+        # - 'suggested': Exercise name pre-filled from suggestion, parse sets/reps/weight only
+        # - 'different': Parse full exercise description
+        # - None: Waiting for user to choose mode
+
     # ========================================================================
     # History Page Filters
     # ========================================================================
@@ -126,6 +133,7 @@ def reset_workout_session():
     """
     st.session_state.workout_session = None
     st.session_state.log_state = 'planning_chat'
+    st.session_state.recording_mode = None
     # Also clear cached transcription
     if 'cached_transcription' in st.session_state:
         del st.session_state.cached_transcription

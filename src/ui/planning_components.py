@@ -33,7 +33,10 @@ def render_template_preview(template: dict):
             st.info(f"💡 {note}")
 
     for i, ex in enumerate(template['exercises'], 1):
-        with st.expander(f"**{i}. {ex.get('name')}**", expanded=False):
+        # Expand first exercise by default to show weights clearly
+        expanded = (i == 1)
+
+        with st.expander(f"**{i}. {ex.get('name')}**", expanded=expanded):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -45,6 +48,8 @@ def render_template_preview(template: dict):
                 suggested_weight = ex.get('suggested_weight_lbs')
                 if suggested_weight:
                     st.metric("Suggested Weight", f"{suggested_weight:.0f} lbs")
+                else:
+                    st.metric("Weight", "Your choice")
 
 
 def render_adjustment_history(adjustments: list[dict]):
