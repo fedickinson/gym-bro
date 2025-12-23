@@ -790,7 +790,7 @@ def generate_workout_summary(session_state: dict) -> str:
                     pass
 
         # Create prompt
-        llm = ChatAnthropic(model="claude-3-5-sonnet-20241022", temperature=0.7)
+        llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", temperature=0.7)
 
         system_msg = SystemMessage(content="""You are an expert personal trainer providing workout guidance.
 
