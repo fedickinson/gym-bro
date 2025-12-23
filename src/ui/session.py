@@ -40,7 +40,7 @@ def init_session_state():
     # Log Workflow State (for multi-step workflow)
     # ========================================================================
     if 'log_state' not in st.session_state:
-        st.session_state.log_state = 'ready'  # ready | preview | saved
+        st.session_state.log_state = 'planning_chat'  # planning_chat | session_active | preview | saved
 
     if 'log_workflow_state' not in st.session_state:
         st.session_state.log_workflow_state = None  # LangGraph state dict
@@ -50,6 +50,24 @@ def init_session_state():
 
     if 'audio_transcription' not in st.session_state:
         st.session_state.audio_transcription = None
+
+    # ========================================================================
+    # Session-Based Workout Logging (session-only mode)
+    # ========================================================================
+    if 'workout_session' not in st.session_state:
+        st.session_state.workout_session = None  # Current workout session state
+        # When active, contains SessionWithPlanState:
+        # {
+        #     "session_id": str,
+        #     "started_at": str,
+        #     "suggested_type": str,  # AI recommendation
+        #     "planned_template": dict,  # Adaptive template
+        #     "plan_adjustments": list[dict],  # Chat modifications
+        #     "equipment_unavailable": list[str] | None,
+        #     "accumulated_exercises": list[dict],
+        #     "actual_workout_type": str,
+        #     ...
+        # }
 
     # ========================================================================
     # History Page Filters
@@ -91,11 +109,24 @@ def init_session_state():
 
 def reset_log_workflow():
     """Reset all log workflow state to start fresh."""
-    st.session_state.log_state = 'ready'
+    st.session_state.log_state = 'planning_chat'
     st.session_state.log_workflow_state = None
     st.session_state.edit_mode = False
     st.session_state.audio_transcription = None
     # Clear cached transcription from audio input
+    if 'cached_transcription' in st.session_state:
+        del st.session_state.cached_transcription
+
+
+def reset_workout_session():
+    """
+    Reset workout session state.
+
+    Use this when canceling a session or after saving.
+    """
+    st.session_state.workout_session = None
+    st.session_state.log_state = 'planning_chat'
+    # Also clear cached transcription
     if 'cached_transcription' in st.session_state:
         del st.session_state.cached_transcription
 

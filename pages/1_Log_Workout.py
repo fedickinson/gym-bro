@@ -9,11 +9,14 @@ State Machine:
 - saved: Success message, next suggestion
 """
 
+# Load environment variables FIRST (before any other imports)
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 from src.ui.session import init_session_state, reset_log_workflow
 from src.ui.navigation import render_bottom_nav
 from src.ui.audio_recorder import combined_input
-from src.ui.loading_overlay import show_loading_overlay, hide_loading_overlay
 from src.agents.log_graph import start_workout_log, continue_workout_log
 from src.tools.recommend_tools import suggest_next_workout, get_workout_template
 
@@ -63,8 +66,63 @@ st.markdown("""
 # State Machine Functions
 # ============================================================================
 
-def render_ready_state():
-    """State 1: Ready to record/type workout"""
+def render_planning_chat_state():
+    """
+    Pre-workout planning with AI chat.
+    Shows suggested workout type, adaptive template, and chat interface for modifications.
+    """
+    st.title("🤖 Plan Your Workout")
+
+    # Initialize planning if needed
+    if not st.session_state.workout_session:
+        from src.agents.session_graph import initialize_planning_session
+        with st.spinner("Getting AI recommendation... 🧠"):
+            st.session_state.workout_session = initialize_planning_session()
+
+    session = st.session_state.workout_session
+
+    # Show AI suggestion
+    st.success(f"**Suggested:** {session.get('suggested_type', 'Push')}")
+    st.caption(session.get('suggestion_reason', 'Based on your weekly split'))
+
+    # Show current template (collapsible)
+    with st.expander("📋 Your Plan", expanded=True):
+        from src.ui.planning_components import render_template_preview, render_equipment_constraints
+        render_template_preview(session.get('planned_template', {}))
+
+        # Show equipment constraints if any
+        render_equipment_constraints(session.get('equipment_unavailable'))
+
+        # Show adjustments made
+        from src.ui.planning_components import render_adjustment_history
+        adjustments = session.get('plan_adjustments', [])
+        if adjustments:
+            render_adjustment_history(adjustments)
+
+    st.divider()
+
+    # Chat interface for modifications
+    from src.ui.planning_components import render_planning_chat_interface
+    planning_input = render_planning_chat_interface()
+
+    if planning_input:
+        # Process planning chat modification
+        from src.agents.session_graph import modify_plan_via_chat
+        with st.spinner("Updating plan... 🔄"):
+            updated_session = modify_plan_via_chat(st.session_state.workout_session, planning_input)
+            st.session_state.workout_session = updated_session
+        st.rerun()
+
+    # Start Workout button
+    from src.ui.planning_components import render_start_workout_button
+    if render_start_workout_button():
+        # Lock plan and begin workout
+        st.session_state.log_state = 'session_active'
+        st.rerun()
+
+
+def render_ready_state_deprecated():
+    """DEPRECATED: Old single-shot mode - to be removed in Phase 6"""
     st.title("🎙️ Log Workout")
     st.caption("Record your workout via voice or type it out")
 
@@ -129,56 +187,29 @@ def render_ready_state():
     # Combined audio + text input
     workout_input = combined_input()
 
-    # Action buttons after transcription/input
+    # Force break from any column context with empty container
+    st.container()
+
+    # Auto-parse when input is available
     if workout_input:
-        st.divider()
+        try:
+            with st.spinner("Understanding your workout... 🧠"):
+                workflow_state = start_workout_log(workout_input)
 
-        # Three-column layout for action buttons
-        col1, col2, col3 = st.columns([2, 2, 1])
+            # Store the raw input for potential editing
+            st.session_state.raw_workout_input = workout_input
 
-        with col1:
-            if st.button("Continue →", type="primary", key="continue_btn", use_container_width=True):
-                try:
-                    # Show loading overlay (Step 2 of 2)
-                    show_loading_overlay(
-                        step=2,
-                        total=2,
-                        message="Understanding your workout... 🧠"
-                    )
+            # Clear cached transcription
+            if 'cached_transcription' in st.session_state:
+                del st.session_state.cached_transcription
 
-                    # Start the log workflow
-                    workflow_state = start_workout_log(workout_input)
+            st.session_state.log_workflow_state = workflow_state
+            st.session_state.log_state = 'preview'
+            st.rerun()
 
-                    # Hide overlay before rerun
-                    hide_loading_overlay()
-
-                    # Clear cached transcription (workflow starting)
-                    if 'cached_transcription' in st.session_state:
-                        del st.session_state.cached_transcription
-
-                    # Update state and rerun
-                    st.session_state.log_workflow_state = workflow_state
-                    st.session_state.log_state = 'preview'
-                    st.rerun()
-
-                except Exception as e:
-                    hide_loading_overlay()
-                    st.error(f"❌ Failed to parse workout: {str(e)}")
-                    st.caption("Please try again or adjust your input")
-
-        with col2:
-            if st.button("🔄 Re-record", key="rerecord_btn", use_container_width=True):
-                # Clear the cached transcription and let user record again
-                if 'cached_transcription' in st.session_state:
-                    del st.session_state.cached_transcription
-                st.rerun()
-
-        with col3:
-            if st.button("✖", key="cancel_transcription_btn", use_container_width=True):
-                # Clear cached transcription and go back home
-                if 'cached_transcription' in st.session_state:
-                    del st.session_state.cached_transcription
-                st.switch_page("app.py")
+        except Exception as e:
+            st.error(f"❌ Failed to parse workout: {str(e)}")
+            st.caption("Please try again or use the text input below to correct it")
 
 
 def render_preview_state():
@@ -245,6 +276,10 @@ def render_preview_state():
 
     with col3:
         if st.button("🔄 Re-record", key="re_record"):
+            # Reset audio recorder for fresh recording
+            if 'audio_recorder_key' not in st.session_state:
+                st.session_state.audio_recorder_key = 0
+            st.session_state.audio_recorder_key += 1
             reset_log_workflow()
             st.rerun()
 
@@ -252,25 +287,41 @@ def render_preview_state():
         if st.button("❌ Cancel", key="cancel"):
             cancel_workflow()
 
-    # Edit mode
+    # Edit mode - show raw text for editing
     if st.session_state.get('edit_mode'):
         st.divider()
-        st.subheader("Make Corrections")
+        st.subheader("✏️ Edit Your Workout Text")
+        st.caption("Fix the text below and we'll re-parse it")
 
-        # Audio or text input for corrections
-        edit_instructions = combined_input()
+        # Show the original raw input for editing
+        raw_input = st.session_state.get('raw_workout_input', '')
+        edited_text = st.text_area(
+            "Workout text",
+            value=raw_input,
+            height=150,
+            help="Edit the text and click Apply to re-parse"
+        )
 
-        if edit_instructions:
-            st.caption(f"**Edit instruction:** {edit_instructions}")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Apply Changes", type="primary", key="apply_changes_btn"):
+                try:
+                    with st.spinner("Re-parsing your workout... 🧠"):
+                        workflow_state = start_workout_log(edited_text)
 
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Apply Changes", type="primary", key="apply_changes_btn"):
-                    save_workout("edit", edit_instructions)
-            with col2:
-                if st.button("Cancel Edit", key="cancel_edit_btn"):
+                    # Update stored raw input
+                    st.session_state.raw_workout_input = edited_text
+                    st.session_state.log_workflow_state = workflow_state
                     st.session_state.edit_mode = False
                     st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Failed to parse: {str(e)}")
+
+        with col2:
+            if st.button("Cancel Edit", key="cancel_edit_btn"):
+                st.session_state.edit_mode = False
+                st.rerun()
 
 
 def render_saved_state():
@@ -320,21 +371,12 @@ def render_saved_state():
 def save_workout(choice: str, edit_instructions: str = None):
     """Continue workflow with user choice"""
     try:
-        # Show loading overlay
-        show_loading_overlay(
-            step=1,
-            total=1,
-            message="Saving your workout... 💾"
-        )
-
-        final_state = continue_workout_log(
-            state=st.session_state.log_workflow_state,
-            user_choice=choice,
-            edit_instructions=edit_instructions
-        )
-
-        # Hide overlay
-        hide_loading_overlay()
+        with st.spinner("Saving your workout... 💾"):
+            final_state = continue_workout_log(
+                state=st.session_state.log_workflow_state,
+                user_choice=choice,
+                edit_instructions=edit_instructions
+            )
 
         st.session_state.log_workflow_state = final_state
 
@@ -348,7 +390,6 @@ def save_workout(choice: str, edit_instructions: str = None):
         st.rerun()
 
     except Exception as e:
-        hide_loading_overlay()
         st.error(f"❌ Failed to save: {str(e)}")
         st.caption("Please try again")
 
@@ -360,16 +401,216 @@ def cancel_workflow():
 
 
 # ============================================================================
+# Session Mode Functions (NEW)
+# ============================================================================
+
+def render_session_start_state():
+    """Render session start screen with AI suggestion."""
+    from src.ui.session_components import render_session_start
+    render_session_start()
+
+
+def render_session_active_state():
+    """Render exercise recording screen for session mode."""
+    from src.ui.session_components import render_session_progress
+
+    st.title("🎙️ Record Exercise")
+
+    # Show session progress
+    if st.session_state.workout_session:
+        render_session_progress(st.session_state.workout_session)
+
+    st.divider()
+
+    # Record exercise input
+    workout_input = combined_input()
+
+    # CRITICAL: Force break from column context (Risk Mitigation #1)
+    st.container()
+
+    # Auto-parse when input provided
+    if workout_input:
+        try:
+            from src.agents.session_graph import add_exercise_to_session
+
+            with st.spinner("Parsing exercise..."):
+                # Parse and add to session
+                updated_session = add_exercise_to_session(
+                    st.session_state.workout_session,
+                    workout_input
+                )
+
+            # Store raw input for potential editing
+            st.session_state.raw_exercise_input = workout_input
+
+            # Clear cached transcription
+            if 'cached_transcription' in st.session_state:
+                del st.session_state.cached_transcription
+
+            # Update session state
+            st.session_state.workout_session = updated_session
+
+            # Check if parsing succeeded
+            if updated_session.get('current_parsed_exercise'):
+                # Move to preview state
+                st.session_state.log_state = 'session_exercise_preview'
+                st.rerun()
+            else:
+                # Parsing failed - show helpful error
+                error_msg = updated_session.get('response', 'Could not parse exercise')
+                st.error(f"❌ {error_msg}")
+
+                # Show example if exercise name was missing
+                if "exercise name" in error_msg.lower():
+                    st.info("💡 **Example:** Say 'Bench press, 3 sets of 10 reps at 135 pounds' or use the text box below")
+
+        except Exception as e:
+            st.error(f"❌ Failed to parse exercise: {str(e)}")
+            st.caption("Please try again or use the text input below to correct it")
+
+    # Cancel session button
+    st.divider()
+    if st.button("❌ Cancel Session", key="cancel_session_btn"):
+        from src.ui.session import reset_workout_session
+        reset_workout_session()
+        st.rerun()
+
+
+def render_session_exercise_preview():
+    """Show exercise preview with action buttons."""
+    from src.ui.session_components import render_exercise_preview
+
+    st.title("✅ Exercise Added")
+
+    # Show parsed exercise
+    session = st.session_state.workout_session
+    if session and session.get('current_parsed_exercise'):
+        render_exercise_preview(session['current_parsed_exercise'])
+
+    st.divider()
+
+    # Action buttons - CRITICAL: Use container break and direct column attachment
+    st.container()  # Force break from any previous column context
+
+    btn_col1, btn_col2 = st.columns(2)
+
+    # Record Next button
+    record_next_clicked = btn_col1.button(
+        "🎙️ Record Next Exercise",
+        type="primary",
+        key="record_next_btn",
+        use_container_width=True
+    )
+
+    # Finish Workout button
+    finish_clicked = btn_col2.button(
+        "✅ Finish Workout",
+        key="finish_workout_btn",
+        use_container_width=True
+    )
+
+    # Handle button clicks
+    if record_next_clicked:
+        from src.agents.session_graph import accumulate_exercise
+
+        # Accumulate current exercise
+        session['user_action'] = 'add_another'
+        updated_session = accumulate_exercise(session)
+
+        # CRITICAL FIX: Clear user_action so next parse doesn't auto-accumulate
+        updated_session['user_action'] = None
+        updated_session['response'] = None  # Also clear response to avoid confusion
+
+        st.session_state.workout_session = updated_session
+
+        # Clear cached transcription
+        if 'cached_transcription' in st.session_state:
+            del st.session_state.cached_transcription
+
+        # Reset audio recorder for next exercise
+        if 'audio_recorder_key' not in st.session_state:
+            st.session_state.audio_recorder_key = 0
+        st.session_state.audio_recorder_key += 1
+
+        # Go back to active state
+        st.session_state.log_state = 'session_active'
+        st.rerun()
+
+    if finish_clicked:
+        from src.agents.session_graph import accumulate_exercise
+
+        # Accumulate current exercise first
+        session['user_action'] = 'add_another'
+        updated_session = accumulate_exercise(session)
+
+        # Clear user_action before transitioning
+        updated_session['user_action'] = None
+
+        st.session_state.workout_session = updated_session
+
+        # Move to review state
+        st.session_state.log_state = 'session_workout_review'
+        st.rerun()
+
+
+def render_session_workout_review():
+    """Review full workout before saving."""
+    from src.ui.session_components import render_workout_review
+
+    # Render review
+    session = st.session_state.workout_session
+    if session:
+        render_workout_review(session)
+
+    st.divider()
+
+    # Save button
+    if st.button("💾 Save Workout", type="primary", use_container_width=True):
+        try:
+            from src.agents.session_graph import finish_session
+
+            with st.spinner("Saving workout..."):
+                # Finish and save session
+                final_session = finish_session(session)
+
+            st.session_state.workout_session = final_session
+
+            if final_session.get('saved'):
+                # Success - move to saved state
+                st.session_state.log_workflow_state = {
+                    'workout_id': final_session.get('workout_id'),
+                    'saved': True
+                }
+                st.session_state.log_state = 'saved'
+                st.rerun()
+            else:
+                st.error(f"❌ {final_session.get('response', 'Failed to save')}")
+
+        except Exception as e:
+            st.error(f"❌ Error saving workout: {str(e)}")
+
+
+# ============================================================================
 # Main State Machine
 # ============================================================================
 
-if st.session_state.log_state == 'ready':
-    render_ready_state()
+if st.session_state.log_state == 'planning_chat':
+    render_planning_chat_state()
+elif st.session_state.log_state == 'ready':
+    # DEPRECATED: Old single-shot mode - redirects to planning
+    st.session_state.log_state = 'planning_chat'
+    st.rerun()
+elif st.session_state.log_state == 'session_active':
+    render_session_active_state()
+elif st.session_state.log_state == 'session_exercise_preview':
+    render_session_exercise_preview()
+elif st.session_state.log_state == 'session_workout_review':
+    render_session_workout_review()
 elif st.session_state.log_state == 'preview':
     render_preview_state()
 elif st.session_state.log_state == 'saved':
     render_saved_state()
 else:
-    # Fallback - reset to ready
-    reset_log_workflow()
+    # Fallback - reset to planning chat
+    st.session_state.log_state = 'planning_chat'
     st.rerun()
