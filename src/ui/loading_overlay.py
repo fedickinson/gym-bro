@@ -3,6 +3,18 @@ Full-page loading overlay for blocking UI during async operations.
 
 Provides a professional, animated loading screen with step-by-step
 progress indicators and motivational messages.
+
+⚠️ CURRENTLY NOT IN USE ⚠️
+
+This module is currently disabled because the `hide_loading_overlay()` function
+uses JavaScript which does not execute in Streamlit, causing the overlay to
+persist and block the UI.
+
+We've replaced all usages with `st.spinner()` which works correctly with
+Streamlit's execution model.
+
+To re-enable this in the future, refactor to use session state-based conditional
+rendering instead of JavaScript DOM manipulation. See git history for details.
 """
 
 import streamlit as st

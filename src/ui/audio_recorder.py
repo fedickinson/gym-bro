@@ -11,7 +11,6 @@ import tempfile
 import openai
 from pathlib import Path
 import os
-from src.ui.loading_overlay import show_loading_overlay, hide_loading_overlay
 
 
 def record_and_transcribe() -> str | None:
@@ -24,8 +23,13 @@ def record_and_transcribe() -> str | None:
     st.subheader("🎙️ Record Your Workout")
     st.caption("Tap to start, speak your workout, tap again to stop")
 
-    # Display audio recorder
+    # Initialize recorder key counter if not exists
+    if 'audio_recorder_key' not in st.session_state:
+        st.session_state.audio_recorder_key = 0
+
+    # Display audio recorder with dynamic key to force reset
     audio_bytes = audio_recorder(
+        key=f"audio_recorder_{st.session_state.audio_recorder_key}",
         text="",
         recording_color="#e74c3c",  # Red during recording
         neutral_color="#4CAF50",    # Green when ready
@@ -63,26 +67,17 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
             tmp_path = tmp_file.name
 
         # Transcribe with Whisper API
-        # Show loading overlay (Step 1 of 2)
-        show_loading_overlay(
-            step=1,
-            total=2,
-            message="Transcribing your audio... 🎙️"
-        )
-
         client = openai.OpenAI()
 
-        with open(tmp_path, "rb") as audio_file:
-            transcription = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                language="en"
-            )
+        with st.spinner("Transcribing your audio... 🎙️"):
+            with open(tmp_path, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="en"
+                )
 
         transcribed_text = transcription.text
-
-        # Hide overlay
-        hide_loading_overlay()
 
         # Check if transcription is empty
         if not transcribed_text.strip():
@@ -96,13 +91,11 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
         return transcribed_text
 
     except openai.APIError as e:
-        hide_loading_overlay()
         st.error(f"❌ OpenAI API error: {str(e)}")
         st.warning("💡 Try typing your workout instead (see below)")
         return None
 
     except Exception as e:
-        hide_loading_overlay()
         st.error(f"❌ Transcription failed: {str(e)}")
         st.warning("💡 Try typing your workout instead (see below)")
         return None
@@ -160,6 +153,7 @@ def combined_input() -> str | None:
     with col2:
         manual_input = text_input_fallback()
 
+    # IMPORTANT: We're now outside the column context here
     # Return cached transcription if available and no new input
     if transcription:
         return transcription

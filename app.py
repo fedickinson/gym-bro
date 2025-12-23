@@ -4,6 +4,10 @@ Gym Bro - Mobile-First AI Fitness Coach
 Main home page with weekly split status and quick actions.
 """
 
+# Load environment variables FIRST (before any other imports)
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 from src.ui.session import init_session_state
 from src.ui.navigation import render_bottom_nav
