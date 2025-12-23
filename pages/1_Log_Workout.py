@@ -247,20 +247,20 @@ def render_preview_state():
     # Edit mode
     if st.session_state.get('edit_mode'):
         st.divider()
-        with st.form("edit_form"):
-            st.subheader("Make Corrections")
-            edit_instructions = st.text_area(
-                "What needs to change?",
-                placeholder="Example: Actually it was 145 lbs on bench",
-                height=100
-            )
+        st.subheader("Make Corrections")
+
+        # Audio or text input for corrections
+        edit_instructions = combined_input()
+
+        if edit_instructions:
+            st.caption(f"**Edit instruction:** {edit_instructions}")
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.form_submit_button("Apply Changes"):
+                if st.button("Apply Changes", type="primary", key="apply_changes_btn"):
                     save_workout("edit", edit_instructions)
             with col2:
-                if st.form_submit_button("Cancel Edit"):
+                if st.button("Cancel Edit", key="cancel_edit_btn"):
                     st.session_state.edit_mode = False
                     st.rerun()
 
