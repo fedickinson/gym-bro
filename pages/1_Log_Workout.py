@@ -85,11 +85,6 @@ def render_planning_chat_state():
     st.success(f"**Suggested:** {session.get('suggested_type', 'Push')}")
     st.caption(session.get('suggestion_reason', 'Based on your weekly split'))
 
-    # Show AI-generated workout summary
-    workout_summary = session.get('workout_summary')
-    if workout_summary:
-        st.info(f"💪 {workout_summary}")
-
     st.divider()
 
     # Show current template (collapsible)
@@ -105,6 +100,12 @@ def render_planning_chat_state():
         adjustments = session.get('plan_adjustments', [])
         if adjustments:
             render_adjustment_history(adjustments)
+
+    # Show AI-generated workout summary (after plan, before modify)
+    workout_summary = session.get('workout_summary')
+    if workout_summary:
+        st.divider()
+        st.info(f"💪 {workout_summary}")
 
     st.divider()
 
