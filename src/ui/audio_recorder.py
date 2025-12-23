@@ -153,13 +153,23 @@ def combined_input() -> str | None:
     with col1:
         transcription = record_and_transcribe()
 
+        # Cache transcription in session state so it persists across reruns
+        if transcription:
+            st.session_state.cached_transcription = transcription
+
     with col2:
         manual_input = text_input_fallback()
 
-    # Return whichever is provided
+    # Return cached transcription if available and no new input
     if transcription:
         return transcription
     elif manual_input and manual_input.strip():
+        # Clear cached transcription if user types instead
+        if 'cached_transcription' in st.session_state:
+            del st.session_state.cached_transcription
         return manual_input
+    elif 'cached_transcription' in st.session_state:
+        # Return cached transcription from previous recording
+        return st.session_state.cached_transcription
     else:
         return None

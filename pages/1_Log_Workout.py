@@ -152,6 +152,10 @@ def render_ready_state():
                     # Hide overlay before rerun
                     hide_loading_overlay()
 
+                    # Clear cached transcription (workflow starting)
+                    if 'cached_transcription' in st.session_state:
+                        del st.session_state.cached_transcription
+
                     # Update state and rerun
                     st.session_state.log_workflow_state = workflow_state
                     st.session_state.log_state = 'preview'
@@ -164,12 +168,16 @@ def render_ready_state():
 
         with col2:
             if st.button("🔄 Re-record", key="rerecord_btn", use_container_width=True):
-                # Clear the transcription and let user record again
+                # Clear the cached transcription and let user record again
+                if 'cached_transcription' in st.session_state:
+                    del st.session_state.cached_transcription
                 st.rerun()
 
         with col3:
             if st.button("✖", key="cancel_transcription_btn", use_container_width=True):
-                # Cancel and go back home
+                # Clear cached transcription and go back home
+                if 'cached_transcription' in st.session_state:
+                    del st.session_state.cached_transcription
                 st.switch_page("app.py")
 
 

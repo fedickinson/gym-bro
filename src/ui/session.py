@@ -95,6 +95,9 @@ def reset_log_workflow():
     st.session_state.log_workflow_state = None
     st.session_state.edit_mode = False
     st.session_state.audio_transcription = None
+    # Clear cached transcription from audio input
+    if 'cached_transcription' in st.session_state:
+        del st.session_state.cached_transcription
 
 
 def add_chat_message(role: str, content: str, **metadata):
