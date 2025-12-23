@@ -70,9 +70,10 @@ def init_session_state():
         # }
 
     if 'recording_mode' not in st.session_state:
-        st.session_state.recording_mode = None  # None | 'suggested' | 'different'
-        # Controls how parser interprets input:
-        # - 'suggested': Exercise name pre-filled from suggestion, parse sets/reps/weight only
+        st.session_state.recording_mode = None  # None | 'exact' | 'modified' | 'different'
+        # Controls how exercise is recorded:
+        # - 'exact': Auto-fill everything from suggestion (no input needed)
+        # - 'modified': Exercise name pre-filled from suggestion, parse sets/reps/weight variations
         # - 'different': Parse full exercise description
         # - None: Waiting for user to choose mode
 
