@@ -500,15 +500,26 @@ def _render_deviation_warning(deviation: dict, session: dict):
     if severity == "major_deviation":
         st.warning(f"⚠️ **Off-Plan:** {impact}")
 
-        # If workout type changed, offer to adapt
+        # If workout type changed, offer to adapt (Phase 4)
         if changes_type:
-            st.info("💡 You can adapt the rest of your plan to match this new direction, or stick with the original plan.")
+            st.info("💡 Choose how to proceed:")
 
-            # Adaptation options (Phase 4 will implement these)
-            with st.expander("🔧 Adaptation Options", expanded=False):
-                st.caption("*Adaptation coming in Phase 4*")
-                st.caption("- **Adapt Rest of Plan**: AI will regenerate remaining exercises to match")
-                st.caption("- **Stick with Original**: Continue with planned exercises")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("🔄 Adapt Rest of Plan", key="adapt_plan_btn", use_container_width=True, type="primary"):
+                    from src.agents.session_graph import adapt_plan
+                    # Adapt the plan to match new direction
+                    updated_session = adapt_plan(session)
+                    st.session_state.workout_session = updated_session
+                    st.success(f"✅ Plan adapted! {updated_session.get('response', '')}")
+                    st.rerun()
+
+            with col2:
+                if st.button("➡️ Continue with Original", key="continue_original_btn", use_container_width=True):
+                    # User chooses to ignore deviation and stick with plan
+                    # Clear deviation warning by not showing it again
+                    st.info("Continuing with original plan")
 
     elif severity == "minor_variation":
         st.info(f"ℹ️ **Minor Variation:** {impact}")

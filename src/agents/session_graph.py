@@ -473,6 +473,65 @@ def check_for_deviation(state: SessionWithPlanState) -> SessionWithPlanState:
 
 
 # ============================================================================
+# Plan Adaptation Node Functions (Phase 4)
+# ============================================================================
+
+def regenerate_plan_after_deviation(state: SessionWithPlanState) -> SessionWithPlanState:
+    """
+    Regenerate workout plan after user deviates and chooses to adapt.
+
+    Updates planned_template with exercises complementary to what user actually did.
+
+    Args:
+        state: Current SessionWithPlanState
+
+    Returns:
+        Updated state with adapted template
+    """
+    from src.agents.plan_adapter import adapt_plan_for_deviation
+
+    try:
+        deviation = state.get('current_deviation')
+
+        if not deviation or not deviation.get('changes_workout_type'):
+            # No need to adapt if no deviation or type didn't change
+            return state
+
+        # Get adaptation
+        accumulated = state.get('accumulated_exercises', [])
+        new_type = deviation.get('new_workout_type', state.get('suggested_type'))
+        equipment_unavailable = state.get('equipment_unavailable')
+
+        adaptation = adapt_plan_for_deviation(
+            accumulated,
+            new_type,
+            equipment_unavailable
+        )
+
+        # Update state with adapted plan
+        return {
+            **state,
+            "planned_template": adaptation.get('adapted_template'),
+            "actual_workout_type": new_type,
+            "plan_adjustments": state.get('plan_adjustments', []) + [{
+                "timestamp": adaptation.get('timestamp'),
+                "user_message": "User deviated - adapted plan",
+                "ai_response": adaptation.get('adaptation_reason'),
+                "template_change": True,
+                "adaptation": True
+            }],
+            "last_activity_at": datetime.now().isoformat(),
+            "response": adaptation.get('adaptation_reason')
+        }
+
+    except Exception as e:
+        return {
+            **state,
+            "response": f"Could not adapt plan: {str(e)}"
+        }
+
+
+# ============================================================================
 # Routing Functions
 # ============================================================================
 
@@ -709,3 +768,24 @@ def refresh_next_suggestion(session_state: dict) -> dict:
         Updated state with refreshed next_suggestion
     """
     return generate_next_suggestion(session_state)
+
+
+def adapt_plan(session_state: dict) -> dict:
+    """
+    Adapt workout plan after deviation.
+
+    Call this when user chooses "Adapt Rest of Plan" after a major deviation.
+
+    Args:
+        session_state: Current SessionWithPlanState with deviation detected
+
+    Returns:
+        Updated state with adapted template and refreshed suggestion
+    """
+    # Regenerate plan
+    result = regenerate_plan_after_deviation(session_state)
+
+    # Refresh suggestion with new plan
+    result = refresh_next_suggestion(result)
+
+    return result
