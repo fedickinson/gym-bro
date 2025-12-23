@@ -51,7 +51,10 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
     patterns = analyze_exercise_patterns(workout_type, days=0)
     volume = analyze_volume_tolerance(workout_type, days=0)
 
-    # 3. Build exercise list (prioritize common exercises)
+    # Check if user has sufficient history to personalize
+    has_history = patterns.get('total_workouts', 0) >= 3  # Need at least 3 workouts to personalize
+
+    # 3. Build exercise list (prioritize common exercises if history exists)
     adapted_exercises = []
     removed_exercises = []
 
@@ -61,33 +64,41 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
         if not exercise_name:
             continue
 
-        # Check if user does this exercise
-        frequency = _get_exercise_frequency(exercise_name, patterns)
+        # Only filter by frequency if user has history
+        if has_history:
+            frequency = _get_exercise_frequency(exercise_name, patterns)
 
-        if frequency < 0.3:  # Skip rarely done exercises
-            removed_exercises.append(exercise_name)
-            continue
+            if frequency < 0.3:  # Skip rarely done exercises
+                removed_exercises.append(exercise_name)
+                continue
 
-        # Get progression status
-        progression = analyze_progression_velocity(exercise_name, days=0)
-        history = get_exercise_history(exercise_name, days=0)  # All-time history
+        # Get progression status (only if user has history)
+        if has_history:
+            progression = analyze_progression_velocity(exercise_name, days=0)
+            history = get_exercise_history(exercise_name, days=0)  # All-time history
 
-        # Determine suggested weight
-        if history and len(history) > 0:
-            last_weight = history[-1]["max_weight"]
+            # Determine suggested weight
+            if history and len(history) > 0:
+                last_weight = history[-1]["max_weight"]
 
-            if progression["suggested_action"] == "increase":
-                suggested_weight = last_weight + max(2.5, progression["avg_weekly_increase"])
-            elif progression["suggested_action"] == "deload":
-                suggested_weight = last_weight * 0.9  # 10% deload
+                if progression["suggested_action"] == "increase":
+                    suggested_weight = last_weight + max(2.5, progression["avg_weekly_increase"])
+                elif progression["suggested_action"] == "deload":
+                    suggested_weight = last_weight * 0.9  # 10% deload
+                else:
+                    suggested_weight = last_weight  # maintain
             else:
-                suggested_weight = last_weight  # maintain
-        else:
-            suggested_weight = None  # No history yet
+                suggested_weight = None  # No history for this exercise yet
 
-        # Determine sets/reps (use user's typical or template default)
-        user_avg_sets = _get_avg_sets_for_exercise(exercise_name, patterns)
-        target_sets = int(user_avg_sets) if user_avg_sets else exercise.get("target_sets", 4)
+            # Determine sets/reps (use user's typical or template default)
+            user_avg_sets = _get_avg_sets_for_exercise(exercise_name, patterns)
+            target_sets = int(user_avg_sets) if user_avg_sets else exercise.get("target_sets", 4)
+            reasoning = _build_reasoning(exercise_name, progression, history)
+        else:
+            # No history - use template defaults
+            suggested_weight = None
+            target_sets = exercise.get("target_sets", 4)
+            reasoning = "Start with a weight you can do comfortably"
 
         # Build adapted exercise
         adapted_exercises.append({
@@ -96,44 +107,51 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
             "target_sets": target_sets,
             "target_reps": exercise.get("target_reps", "8-10"),
             "rest_seconds": exercise.get("rest_seconds", 90),
-            "reasoning": _build_reasoning(exercise_name, progression, history)
+            "reasoning": reasoning
         })
 
-    # 4. Build coaching notes
+    # 4. Build coaching notes (only for users with history)
     coaching_notes = []
 
-    if volume["volume_trend"] == "increasing":
-        pct_increase = ((volume["recent_avg_sets"] - volume["older_avg_sets"]) /
-                       volume["older_avg_sets"] * 100) if volume["older_avg_sets"] > 0 else 0
-        if pct_increase > 15:
-            coaching_notes.append(
-                f"⚠️ Volume has increased {pct_increase:.0f}% over time. "
-                "Consider a deload if feeling fatigued."
-            )
+    if has_history:
+        if volume["volume_trend"] == "increasing":
+            pct_increase = ((volume["recent_avg_sets"] - volume["older_avg_sets"]) /
+                           volume["older_avg_sets"] * 100) if volume["older_avg_sets"] > 0 else 0
+            if pct_increase > 15:
+                coaching_notes.append(
+                    f"⚠️ Volume has increased {pct_increase:.0f}% over time. "
+                    "Consider a deload if feeling fatigued."
+                )
 
-    if volume["volume_trend"] == "decreasing":
-        coaching_notes.append(
-            "📉 Volume has decreased recently. Consider increasing if recovering well."
-        )
+        if volume["volume_trend"] == "decreasing":
+            coaching_notes.append(
+                "📉 Volume has decreased recently. Consider increasing if recovering well."
+            )
 
     # 5. Build adaptations summary
     adaptations = []
 
-    if removed_exercises:
-        adaptations.append(
-            f"Removed {len(removed_exercises)} rarely-done exercises"
-        )
-
-    if len(adapted_exercises) > 0:
-        weights_adjusted = sum(1 for ex in adapted_exercises if ex.get("suggested_weight_lbs"))
-        if weights_adjusted > 0:
+    if not has_history:
+        # User is new - using base template
+        adaptations.append("Using base template - we'll personalize as you build history")
+    else:
+        # User has history - show personalizations
+        if removed_exercises:
             adaptations.append(
-                f"Personalized weights for {weights_adjusted} exercises based on your progression"
+                f"Removed {len(removed_exercises)} rarely-done exercises"
             )
 
-    adaptations.append(
-        f"Volume adjusted to {volume['avg_total_sets']:.0f} sets (your typical)"
-    )
+        if len(adapted_exercises) > 0:
+            weights_adjusted = sum(1 for ex in adapted_exercises if ex.get("suggested_weight_lbs"))
+            if weights_adjusted > 0:
+                adaptations.append(
+                    f"Suggested weights for {weights_adjusted} exercises based on your last workout"
+                )
+
+        if volume.get('avg_total_sets', 0) > 0:
+            adaptations.append(
+                f"Volume adjusted to {volume['avg_total_sets']:.0f} sets (your typical)"
+            )
 
     # 6. Return adaptive template
     return {

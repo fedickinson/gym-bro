@@ -22,25 +22,15 @@ def render_template_preview(template: dict):
         st.warning("No template loaded")
         return
 
-    # Show template info
-    mode = template.get('mode', 'static')
-    if mode == 'adaptive':
-        st.info("✨ **Personalized** based on your training history")
-
-        # Show adaptations made
-        if template.get('adaptations'):
-            with st.expander("🔍 What Changed?", expanded=False):
-                for adaptation in template['adaptations']:
-                    st.write(f"• {adaptation}")
-
-        # Show coaching notes
-        if template.get('coaching_notes'):
-            for note in template['coaching_notes']:
-                st.warning(note)
-
     # Display exercises
     st.subheader(f"{template.get('type', 'Unknown')} Workout")
     st.caption(f"{len(template['exercises'])} exercises")
+
+    # Show coaching notes if any (simplified)
+    coaching_notes = template.get('coaching_notes', [])
+    if coaching_notes:
+        for note in coaching_notes:
+            st.info(f"💡 {note}")
 
     for i, ex in enumerate(template['exercises'], 1):
         with st.expander(f"**{i}. {ex.get('name')}**", expanded=False):
@@ -55,10 +45,6 @@ def render_template_preview(template: dict):
                 suggested_weight = ex.get('suggested_weight_lbs')
                 if suggested_weight:
                     st.metric("Suggested Weight", f"{suggested_weight:.0f} lbs")
-
-            # Show reasoning for adaptive templates
-            if mode == 'adaptive' and ex.get('reasoning'):
-                st.caption(f"💡 {ex['reasoning']}")
 
 
 def render_adjustment_history(adjustments: list[dict]):
@@ -96,15 +82,20 @@ def render_planning_chat_interface():
     st.subheader("💬 Modify Your Plan")
     st.caption("Ask to change exercises, equipment, or focus")
 
-    # Text input for modifications
-    planning_input = st.text_input(
-        "Planning chat",
-        placeholder="e.g., 'No barbell today' or 'Add more shoulder work'",
-        key="planning_chat_input",
-        label_visibility="collapsed"
-    )
+    # Use a form to prevent reprocessing on rerun
+    with st.form(key="planning_chat_form", clear_on_submit=True):
+        planning_input = st.text_input(
+            "Planning chat",
+            placeholder="e.g., 'No barbell today' or 'Add more shoulder work'",
+            label_visibility="collapsed"
+        )
 
-    return planning_input if planning_input and planning_input.strip() else None
+        submitted = st.form_submit_button("Update Plan", use_container_width=True)
+
+        if submitted and planning_input and planning_input.strip():
+            return planning_input
+
+    return None
 
 
 def render_equipment_constraints(equipment_unavailable: list[str] | None):
