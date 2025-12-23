@@ -129,32 +129,48 @@ def render_ready_state():
     # Combined audio + text input
     workout_input = combined_input()
 
-    # Continue button
+    # Action buttons after transcription/input
     if workout_input:
-        if st.button("Continue →", type="primary", key="continue_btn"):
-            try:
-                # Show loading overlay (Step 2 of 2)
-                show_loading_overlay(
-                    step=2,
-                    total=2,
-                    message="Understanding your workout... 🧠"
-                )
+        st.divider()
 
-                # Start the log workflow
-                workflow_state = start_workout_log(workout_input)
+        # Three-column layout for action buttons
+        col1, col2, col3 = st.columns([2, 2, 1])
 
-                # Hide overlay before rerun
-                hide_loading_overlay()
+        with col1:
+            if st.button("Continue →", type="primary", key="continue_btn", use_container_width=True):
+                try:
+                    # Show loading overlay (Step 2 of 2)
+                    show_loading_overlay(
+                        step=2,
+                        total=2,
+                        message="Understanding your workout... 🧠"
+                    )
 
-                # Update state and rerun
-                st.session_state.log_workflow_state = workflow_state
-                st.session_state.log_state = 'preview'
+                    # Start the log workflow
+                    workflow_state = start_workout_log(workout_input)
+
+                    # Hide overlay before rerun
+                    hide_loading_overlay()
+
+                    # Update state and rerun
+                    st.session_state.log_workflow_state = workflow_state
+                    st.session_state.log_state = 'preview'
+                    st.rerun()
+
+                except Exception as e:
+                    hide_loading_overlay()
+                    st.error(f"❌ Failed to parse workout: {str(e)}")
+                    st.caption("Please try again or adjust your input")
+
+        with col2:
+            if st.button("🔄 Re-record", key="rerecord_btn", use_container_width=True):
+                # Clear the transcription and let user record again
                 st.rerun()
 
-            except Exception as e:
-                hide_loading_overlay()
-                st.error(f"❌ Failed to parse workout: {str(e)}")
-                st.caption("Please try again or adjust your input")
+        with col3:
+            if st.button("✖", key="cancel_transcription_btn", use_container_width=True):
+                # Cancel and go back home
+                st.switch_page("app.py")
 
 
 def render_preview_state():
