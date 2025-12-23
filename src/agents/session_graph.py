@@ -794,14 +794,18 @@ def generate_workout_summary(session_state: dict) -> str:
 
         system_msg = SystemMessage(content="""You are an expert personal trainer providing workout guidance.
 
-Your summary should:
-- Explain what makes this workout effective (muscle groups, movement patterns, synergy between exercises)
-- Reference specific exercises and how they work together
-- Mention progression when weight suggestions are available
-- Note recovery timing if relevant
-- Be enthusiastic but professional
+Format your response as follows:
+1. Start with a bold opening statement (1 sentence) about what today's workout targets
+2. Add a paragraph explaining the exercise synergy and progression
+3. End with a brief recovery/timing note
 
-Write 3-4 sentences that sound like an experienced trainer briefing their client.""")
+Use markdown formatting:
+- **Bold** for key concepts and exercise names
+- Short paragraphs (2-3 sentences max)
+- No headers or titles
+- Keep it concise and readable
+
+Write like you're briefing a client in person—professional, encouraging, and specific.""")
 
         workout_context = f"""
 Workout Type: {workout_type}
@@ -821,16 +825,16 @@ Historical Context:
 {f'- Last {workout_type} workout: {days_since_last} days ago' if days_since_last is not None else ''}
 """
 
-        human_msg = HumanMessage(content=f"""As an expert trainer, provide a brief but insightful summary of this workout plan:
+        human_msg = HumanMessage(content=f"""Provide a well-formatted workout summary for this plan:
 
 {workout_context}
 
-Write 3-4 sentences explaining:
-1. What we're targeting and why these exercises work well together
-2. Any progression or personalization (weights, volume adjustments)
-3. How this fits into their training (recovery, weekly split balance)
+Structure (use markdown):
+1. **Opening**: Bold statement about primary focus (e.g., "**Today we're building lower body strength...**")
+2. **Body**: Explain exercise synergy, mention specific exercises by name with **bold**, note any progression
+3. **Close**: Recovery timing or weekly split context
 
-Be specific, reference actual exercises, and sound like an experienced trainer.""")
+Keep paragraphs short. Be specific and reference actual exercises.""")
 
         response = llm.invoke([system_msg, human_msg])
         return response.content

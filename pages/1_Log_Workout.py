@@ -105,7 +105,8 @@ def render_planning_chat_state():
     workout_summary = session.get('workout_summary')
     if workout_summary:
         st.divider()
-        st.info(f"💪 {workout_summary}")
+        st.markdown("### 💪 Workout Breakdown")
+        st.markdown(workout_summary)
 
     st.divider()
 
