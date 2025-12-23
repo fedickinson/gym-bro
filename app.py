@@ -14,6 +14,12 @@ from src.ui.navigation import render_bottom_nav
 from src.tools.recommend_tools import get_weekly_split_status
 from src.data import get_all_logs
 
+# CRITICAL: Import audio recorder here to initialize component for multipage app
+try:
+    from audio_recorder_streamlit import audio_recorder
+except:
+    pass  # Component will be available in pages even if import fails here
+
 # ============================================================================
 # Page Configuration
 # ============================================================================
