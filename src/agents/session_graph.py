@@ -732,13 +732,13 @@ def finish_session(session_state: dict) -> dict:
 
 def generate_workout_summary(session_state: dict) -> str:
     """
-    Generate an AI summary of the planned workout.
+    Generate an AI summary of the planned workout with trainer-level insights.
 
     Args:
         session_state: Current planning session state
 
     Returns:
-        Natural language summary of the workout
+        Natural language summary with exercise analysis and progression context
     """
     from langchain_anthropic import ChatAnthropic
     from langchain_core.messages import SystemMessage, HumanMessage
@@ -750,53 +750,97 @@ def generate_workout_summary(session_state: dict) -> str:
         template = session_state.get('planned_template', {})
         exercises = template.get('exercises', [])
         adaptations = template.get('adaptations', [])
+        coaching_notes = template.get('coaching_notes', [])
 
         # Get historical context
         from src.data import get_logs_by_date_range
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, date
 
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=30)
         all_recent_logs = get_logs_by_date_range(start_date, end_date)
         past_workouts = [log for log in all_recent_logs if log.get('type') == workout_type]
 
-        # Build context for AI
-        exercise_list = [ex.get('name') for ex in exercises[:5]]  # First 5
-        exercise_summary = ', '.join(exercise_list)
-        if len(exercises) > 5:
-            exercise_summary += f', and {len(exercises) - 5} more'
+        # Build detailed exercise context
+        exercise_details = []
+        for ex in exercises[:4]:  # First 4 exercises for detail
+            ex_detail = f"{ex.get('name')} - {ex.get('target_sets')}×{ex.get('target_reps')}"
+
+            weight = ex.get('suggested_weight_lbs')
+            if weight:
+                ex_detail += f" @ {weight:.0f} lbs"
+
+            reasoning = ex.get('reasoning', '')
+            if reasoning and 'last workout' in reasoning.lower():
+                # Extract key progression info
+                ex_detail += f" ({reasoning[:60]}...)" if len(reasoning) > 60 else f" ({reasoning})"
+
+            exercise_details.append(ex_detail)
+
+        # Calculate days since last workout
+        days_since_last = None
+        if past_workouts and len(past_workouts) > 0:
+            last_workout = past_workouts[0]
+            last_date_str = last_workout.get('date')
+            if last_date_str:
+                try:
+                    last_date = datetime.strptime(last_date_str, '%Y-%m-%d').date()
+                    days_since_last = (end_date - last_date).days
+                except:
+                    pass
 
         # Create prompt
         llm = ChatAnthropic(model="claude-3-5-sonnet-20241022", temperature=0.7)
 
-        system_msg = SystemMessage(content="""You are an enthusiastic fitness coach.
-Generate a brief, motivating summary (2-3 sentences) of today's workout plan.
-Be conversational, encouraging, and highlight what makes this workout a good choice today.
-If historical data is available, mention progression or patterns.""")
+        system_msg = SystemMessage(content="""You are an expert personal trainer providing workout guidance.
+
+Your summary should:
+- Explain what makes this workout effective (muscle groups, movement patterns, synergy between exercises)
+- Reference specific exercises and how they work together
+- Mention progression when weight suggestions are available
+- Note recovery timing if relevant
+- Be enthusiastic but professional
+
+Write 3-4 sentences that sound like an experienced trainer briefing their client.""")
 
         workout_context = f"""
 Workout Type: {workout_type}
 Why Suggested: {suggestion_reason}
-Exercises: {exercise_summary}
-Adaptations: {', '.join(adaptations) if adaptations else 'Base template'}
-Past {workout_type} Workouts (last 30 days): {len(past_workouts)}
+
+Exercises with Details:
+{chr(10).join(f'• {detail}' for detail in exercise_details)}
+{'• ...and ' + str(len(exercises) - 4) + ' more' if len(exercises) > 4 else ''}
+
+Template Adaptations:
+{chr(10).join(f'• {adapt}' for adapt in adaptations) if adaptations else '• Using base template'}
+
+{f'Coaching Notes: {chr(10).join(coaching_notes)}' if coaching_notes else ''}
+
+Historical Context:
+- Total {workout_type} workouts in last 30 days: {len(past_workouts)}
+{f'- Last {workout_type} workout: {days_since_last} days ago' if days_since_last is not None else ''}
 """
 
-        if past_workouts and len(past_workouts) > 0:
-            last_workout = past_workouts[0]
-            last_date = last_workout.get('date', 'recently')
-            workout_context += f"\nLast {workout_type} workout: {last_date}"
-
-        human_msg = HumanMessage(content=f"""Summarize this workout plan in a friendly, motivating way:
+        human_msg = HumanMessage(content=f"""As an expert trainer, provide a brief but insightful summary of this workout plan:
 
 {workout_context}
 
-Keep it to 2-3 sentences. Be specific about what makes this a good workout today.""")
+Write 3-4 sentences explaining:
+1. What we're targeting and why these exercises work well together
+2. Any progression or personalization (weights, volume adjustments)
+3. How this fits into their training (recovery, weekly split balance)
+
+Be specific, reference actual exercises, and sound like an experienced trainer.""")
 
         response = llm.invoke([system_msg, human_msg])
         return response.content
 
     except Exception as e:
+        # Log error for debugging
+        print(f"Error generating workout summary: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
         # Fallback summary if AI generation fails
         workout_type = session_state.get('suggested_type', 'workout')
         num_exercises = len(session_state.get('planned_template', {}).get('exercises', []))
