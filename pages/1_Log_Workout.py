@@ -85,6 +85,13 @@ def render_planning_chat_state():
     st.success(f"**Suggested:** {session.get('suggested_type', 'Push')}")
     st.caption(session.get('suggestion_reason', 'Based on your weekly split'))
 
+    # Show AI-generated workout summary
+    workout_summary = session.get('workout_summary')
+    if workout_summary:
+        st.info(f"💪 {workout_summary}")
+
+    st.divider()
+
     # Show current template (collapsible)
     with st.expander("📋 Your Plan", expanded=True):
         from src.ui.planning_components import render_template_preview, render_equipment_constraints

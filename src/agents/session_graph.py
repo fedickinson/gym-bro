@@ -730,6 +730,79 @@ def finish_session(session_state: dict) -> dict:
 # Phase 1: Planning Convenience Functions
 # ============================================================================
 
+def generate_workout_summary(session_state: dict) -> str:
+    """
+    Generate an AI summary of the planned workout.
+
+    Args:
+        session_state: Current planning session state
+
+    Returns:
+        Natural language summary of the workout
+    """
+    from langchain_anthropic import ChatAnthropic
+    from langchain_core.messages import SystemMessage, HumanMessage
+
+    try:
+        # Extract workout details
+        workout_type = session_state.get('suggested_type', 'Unknown')
+        suggestion_reason = session_state.get('suggestion_reason', '')
+        template = session_state.get('planned_template', {})
+        exercises = template.get('exercises', [])
+        adaptations = template.get('adaptations', [])
+
+        # Get historical context
+        from src.data import get_logs_by_date_range
+        from datetime import datetime, timedelta
+
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=30)
+        all_recent_logs = get_logs_by_date_range(start_date, end_date)
+        past_workouts = [log for log in all_recent_logs if log.get('type') == workout_type]
+
+        # Build context for AI
+        exercise_list = [ex.get('name') for ex in exercises[:5]]  # First 5
+        exercise_summary = ', '.join(exercise_list)
+        if len(exercises) > 5:
+            exercise_summary += f', and {len(exercises) - 5} more'
+
+        # Create prompt
+        llm = ChatAnthropic(model="claude-3-5-sonnet-20241022", temperature=0.7)
+
+        system_msg = SystemMessage(content="""You are an enthusiastic fitness coach.
+Generate a brief, motivating summary (2-3 sentences) of today's workout plan.
+Be conversational, encouraging, and highlight what makes this workout a good choice today.
+If historical data is available, mention progression or patterns.""")
+
+        workout_context = f"""
+Workout Type: {workout_type}
+Why Suggested: {suggestion_reason}
+Exercises: {exercise_summary}
+Adaptations: {', '.join(adaptations) if adaptations else 'Base template'}
+Past {workout_type} Workouts (last 30 days): {len(past_workouts)}
+"""
+
+        if past_workouts and len(past_workouts) > 0:
+            last_workout = past_workouts[0]
+            last_date = last_workout.get('date', 'recently')
+            workout_context += f"\nLast {workout_type} workout: {last_date}"
+
+        human_msg = HumanMessage(content=f"""Summarize this workout plan in a friendly, motivating way:
+
+{workout_context}
+
+Keep it to 2-3 sentences. Be specific about what makes this a good workout today.""")
+
+        response = llm.invoke([system_msg, human_msg])
+        return response.content
+
+    except Exception as e:
+        # Fallback summary if AI generation fails
+        workout_type = session_state.get('suggested_type', 'workout')
+        num_exercises = len(session_state.get('planned_template', {}).get('exercises', []))
+        return f"Ready for your {workout_type} workout with {num_exercises} exercises. Let's get stronger today!"
+
+
 def initialize_planning_session() -> dict:
     """
     Initialize a new planning session with AI recommendation.
@@ -758,11 +831,15 @@ def initialize_planning_session() -> dict:
         "user_action": None,
         "saved": False,
         "workout_id": None,
-        "response": None
+        "response": None,
+        "workout_summary": None  # AI-generated workout summary
     }
 
     # Call initialize_planning to populate with AI recommendation
     result = initialize_planning(initial_state)
+
+    # Generate AI summary of the workout
+    result['workout_summary'] = generate_workout_summary(result)
 
     # Generate initial suggestion (first exercise from plan)
     result = generate_next_suggestion(result)
@@ -782,6 +859,9 @@ def modify_plan_via_chat(session_state: dict, user_message: str) -> dict:
         Updated session state with modified template
     """
     result = process_planning_chat(session_state, user_message)
+
+    # Regenerate AI summary with updated plan
+    result['workout_summary'] = generate_workout_summary(result)
 
     # Regenerate suggestion with updated plan
     result = generate_next_suggestion(result)
