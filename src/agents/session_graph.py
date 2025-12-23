@@ -73,6 +73,14 @@ class SessionWithPlanState(TypedDict):
     #   suggested_weight_lbs, reasoning, plan_index
     # }
 
+    # Deviation Detection (Phase 3)
+    current_deviation: dict | None
+    # {
+    #   is_deviation: bool, severity: "none"|"minor_variation"|"major_deviation",
+    #   similarity_score: float, planned_name: str, actual_name: str,
+    #   impact_description: str, changes_workout_type: bool, new_workout_type: str
+    # }
+
     # User actions
     user_action: Literal["add_another", "finish", "cancel", "adapt_plan", "continue_plan"] | None
 
@@ -408,6 +416,63 @@ def generate_next_suggestion(state: SessionWithPlanState) -> SessionWithPlanStat
 
 
 # ============================================================================
+# Deviation Detection Node Functions (Phase 3)
+# ============================================================================
+
+def check_for_deviation(state: SessionWithPlanState) -> SessionWithPlanState:
+    """
+    Check if current exercise deviates from the plan.
+
+    Compares current_parsed_exercise against planned_template[current_exercise_index].
+
+    Args:
+        state: Current SessionWithPlanState
+
+    Returns:
+        Updated state with current_deviation populated
+    """
+    from src.agents.deviation_detector import detect_deviation
+
+    try:
+        current_exercise = state.get('current_parsed_exercise')
+
+        if not current_exercise:
+            # No exercise to check
+            return {
+                **state,
+                "current_deviation": None
+            }
+
+        # Get planned exercise at current index
+        planned_template = state.get('planned_template', {})
+        current_index = state.get('current_exercise_index', 0)
+        plan_exercises = planned_template.get('exercises', [])
+
+        # Get planned exercise (if in bounds)
+        planned_exercise = None
+        if current_index < len(plan_exercises):
+            planned_exercise = plan_exercises[current_index]
+
+        # Detect deviation
+        current_type = state.get('actual_workout_type', state.get('suggested_type', 'Unknown'))
+        deviation = detect_deviation(current_exercise, planned_exercise, current_type)
+
+        return {
+            **state,
+            "current_deviation": deviation,
+            "last_activity_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        # On error, return state with no deviation data
+        return {
+            **state,
+            "current_deviation": None,
+            "response": f"Could not check deviation: {str(e)}"
+        }
+
+
+# ============================================================================
 # Routing Functions
 # ============================================================================
 
@@ -517,7 +582,7 @@ def add_exercise_to_session(session_state: dict, exercise_input: str) -> dict:
     Parse and add an exercise to the session.
 
     Args:
-        session_state: Current session state
+        session_state: Current session state (SessionWithPlanState)
         exercise_input: Raw exercise input (from voice or text)
 
     Returns:
@@ -527,10 +592,22 @@ def add_exercise_to_session(session_state: dict, exercise_input: str) -> dict:
     session_state["current_exercise_input"] = exercise_input
 
     # Build graph and invoke
+    # Note: Graph uses SessionWorkoutState, so preserve SessionWithPlanState fields
     graph = build_session_graph()
 
     # Run parsing
     result = graph.invoke(session_state)
+
+    # CRITICAL: Preserve SessionWithPlanState fields that graph doesn't know about
+    # The graph only returns SessionWorkoutState fields
+    result = {
+        **session_state,  # Preserve all original fields
+        **result  # Override with parsed results
+    }
+
+    # Phase 3: Check for deviation after parsing
+    if result.get('current_parsed_exercise'):
+        result = check_for_deviation(result)
 
     return result
 
@@ -584,6 +661,7 @@ def initialize_planning_session() -> dict:
         "current_exercise_input": None,
         "current_parsed_exercise": None,
         "next_suggestion": None,  # Phase 2: AI suggestions
+        "current_deviation": None,  # Phase 3: Deviation detection
         "user_action": None,
         "saved": False,
         "workout_id": None,

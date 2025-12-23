@@ -484,6 +484,36 @@ def render_session_active_state():
         st.rerun()
 
 
+def _render_deviation_warning(deviation: dict, session: dict):
+    """
+    Render deviation warning when user goes off-plan.
+
+    Args:
+        deviation: Deviation analysis dict
+        session: Current session state
+    """
+    severity = deviation.get('severity', 'none')
+    impact = deviation.get('impact_description', 'Deviation detected')
+    changes_type = deviation.get('changes_workout_type', False)
+
+    # Show warning based on severity
+    if severity == "major_deviation":
+        st.warning(f"⚠️ **Off-Plan:** {impact}")
+
+        # If workout type changed, offer to adapt
+        if changes_type:
+            st.info("💡 You can adapt the rest of your plan to match this new direction, or stick with the original plan.")
+
+            # Adaptation options (Phase 4 will implement these)
+            with st.expander("🔧 Adaptation Options", expanded=False):
+                st.caption("*Adaptation coming in Phase 4*")
+                st.caption("- **Adapt Rest of Plan**: AI will regenerate remaining exercises to match")
+                st.caption("- **Stick with Original**: Continue with planned exercises")
+
+    elif severity == "minor_variation":
+        st.info(f"ℹ️ **Minor Variation:** {impact}")
+
+
 def render_session_exercise_preview():
     """Show exercise preview with action buttons."""
     from src.ui.session_components import render_exercise_preview
@@ -494,6 +524,11 @@ def render_session_exercise_preview():
     session = st.session_state.workout_session
     if session and session.get('current_parsed_exercise'):
         render_exercise_preview(session['current_parsed_exercise'])
+
+    # Phase 3: Show deviation warning if detected
+    deviation = session.get('current_deviation') if session else None
+    if deviation and deviation.get('is_deviation'):
+        _render_deviation_warning(deviation, session)
 
     st.divider()
 
