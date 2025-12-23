@@ -55,7 +55,8 @@ def suggest_next_exercise(
         return _suggest_from_plan(
             planned_template,
             current_index,
-            accumulated
+            accumulated,
+            session_state.get('equipment_unavailable', [])  # Phase 5: Pass equipment constraints
         )
     else:
         return _suggest_adaptive(
@@ -68,7 +69,8 @@ def suggest_next_exercise(
 def _suggest_from_plan(
     planned_template: dict,
     current_index: int,
-    accumulated_exercises: list[dict]
+    accumulated_exercises: list[dict],
+    equipment_unavailable: list[str] | None = None
 ) -> dict:
     """
     Get next exercise from the planned template.
@@ -77,6 +79,7 @@ def _suggest_from_plan(
         planned_template: The workout template
         current_index: Current position in plan (0-based)
         accumulated_exercises: Exercises completed so far
+        equipment_unavailable: Equipment constraints (Phase 5)
 
     Returns:
         Suggestion dict with source="plan"
@@ -100,8 +103,36 @@ def _suggest_from_plan(
     # Get next exercise from plan
     next_exercise = plan_exercises[current_index]
 
-    # Get weight suggestion from history (if available)
+    # Get exercise name
     exercise_name = next_exercise.get('name')
+
+    # Phase 5: Check if exercise requires unavailable equipment
+    if equipment_unavailable and _requires_unavailable_equipment(exercise_name, equipment_unavailable):
+        # Skip this exercise and try to find next available one
+        for i in range(current_index + 1, len(plan_exercises)):
+            candidate = plan_exercises[i]
+            candidate_name = candidate.get('name')
+
+            if not _requires_unavailable_equipment(candidate_name, equipment_unavailable):
+                # Found an available exercise
+                exercise_name = candidate_name
+                next_exercise = candidate
+                current_index = i
+                break
+        else:
+            # No available exercises in plan - return empty suggestion
+            return {
+                "source": "plan",
+                "exercise_name": None,
+                "target_sets": 0,
+                "target_reps": 0,
+                "suggested_weight_lbs": None,
+                "rest_seconds": 0,
+                "reasoning": "All planned exercises require unavailable equipment",
+                "plan_index": None
+            }
+
+    # Get weight suggestion from history (if available)
     suggested_weight = next_exercise.get('suggested_weight_lbs')
 
     # If template doesn't have weight suggestion, check history
@@ -159,24 +190,33 @@ def _suggest_adaptive(
         template = template_result
         exercises = template.get('exercises', [])
 
-        # Find first exercise NOT already done
+        # Find first exercise NOT already done AND doesn't require unavailable equipment
         for ex in exercises:
-            if ex.get('name') not in done_exercise_names:
-                # Get progressive weight
-                suggested_weight = ex.get('suggested_weight_lbs')
-                if not suggested_weight:
-                    suggested_weight = _get_progressive_weight(ex.get('name'))
+            exercise_name = ex.get('name')
 
-                return {
-                    "source": "adaptive",
-                    "exercise_name": ex.get('name'),
-                    "target_sets": ex.get('target_sets', 3),
-                    "target_reps": ex.get('target_reps', 10),
-                    "suggested_weight_lbs": suggested_weight,
-                    "rest_seconds": ex.get('rest_seconds', 90),
-                    "reasoning": f"AI suggests complementary {workout_type} exercise",
-                    "plan_index": None
-                }
+            # Skip if already done
+            if exercise_name in done_exercise_names:
+                continue
+
+            # Phase 5: Skip if requires unavailable equipment
+            if equipment_unavailable and _requires_unavailable_equipment(exercise_name, equipment_unavailable):
+                continue
+
+            # Get progressive weight
+            suggested_weight = ex.get('suggested_weight_lbs')
+            if not suggested_weight:
+                suggested_weight = _get_progressive_weight(exercise_name)
+
+            return {
+                "source": "adaptive",
+                "exercise_name": exercise_name,
+                "target_sets": ex.get('target_sets', 3),
+                "target_reps": ex.get('target_reps', 10),
+                "suggested_weight_lbs": suggested_weight,
+                "rest_seconds": ex.get('rest_seconds', 90),
+                "reasoning": f"AI suggests complementary {workout_type} exercise",
+                "plan_index": None
+            }
 
     # Fallback: No suggestion available
     return {
@@ -189,6 +229,62 @@ def _suggest_adaptive(
         "reasoning": "Great workout! Consider finishing or adding your own exercise.",
         "plan_index": None
     }
+
+
+def _requires_unavailable_equipment(exercise_name: str, equipment_unavailable: list[str]) -> bool:
+    """
+    Check if exercise requires equipment that's unavailable.
+
+    Args:
+        exercise_name: Name of the exercise
+        equipment_unavailable: List of unavailable equipment
+
+    Returns:
+        True if exercise requires unavailable equipment, False otherwise
+    """
+    if not equipment_unavailable:
+        return False
+
+    # Normalize exercise name
+    exercise_lower = exercise_name.lower()
+
+    # Equipment aliases/variations
+    equipment_aliases = {
+        'barbell': ['barbell', ' bar ', 'bb '],  # Use word boundaries
+        'dumbbell': ['dumbbell', ' db '],
+        'cable': ['cable'],
+        'machine': ['machine'],
+        'smith': ['smith machine', 'smith'],
+        'band': ['band', 'resistance band']
+    }
+
+    # Check if any unavailable equipment is mentioned in the exercise name
+    for equipment in equipment_unavailable:
+        equipment_lower = equipment.lower().strip()
+
+        # Find matching aliases for this equipment
+        matching_aliases = []
+        for base_equipment, aliases in equipment_aliases.items():
+            if equipment_lower == base_equipment or equipment_lower in [a.strip() for a in aliases]:
+                matching_aliases = aliases
+                break
+
+        # If no aliases found, use direct equipment name
+        if not matching_aliases:
+            matching_aliases = [equipment_lower]
+
+        # Check if any alias appears in exercise name (with word boundary awareness)
+        exercise_with_spaces = f" {exercise_lower} "  # Add spaces for word boundary checking
+        for alias in matching_aliases:
+            alias_clean = alias.strip()
+            # Check with word boundaries
+            if f" {alias_clean} " in exercise_with_spaces:
+                return True
+            # Also check if alias appears at start or end
+            if exercise_lower.startswith(alias_clean) or exercise_lower.endswith(alias_clean):
+                return True
+
+    return False
 
 
 def _get_progressive_weight(exercise_name: str) -> float | None:
