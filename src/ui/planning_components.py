@@ -118,21 +118,35 @@ def render_equipment_constraints(equipment_unavailable: list[str] | None):
 
 def render_start_workout_button() -> bool:
     """
-    Render the "Start Workout" button.
+    Render the "Start Workout" and "Cancel" buttons.
 
     Returns:
-        True if button was clicked, False otherwise
+        True if "Start Workout" was clicked, False otherwise
+        (Cancel is handled internally)
     """
     st.divider()
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2 = st.columns(2)
 
-    with col2:
-        clicked = st.button(
+    with col1:
+        start_clicked = st.button(
             "🏋️ Start Workout",
             type="primary",
             use_container_width=True,
             key="start_workout_btn"
         )
 
-    return clicked
+    with col2:
+        cancel_clicked = st.button(
+            "❌ Cancel",
+            use_container_width=True,
+            key="cancel_planning_btn"
+        )
+
+    # Handle cancel
+    if cancel_clicked:
+        from src.ui.session import reset_workout_session
+        reset_workout_session()
+        st.rerun()
+
+    return start_clicked
