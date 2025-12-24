@@ -73,12 +73,14 @@ class GymBroOrchestrator:
 
         print("✅ All systems ready!\n")
 
-    def process_message(self, user_input: str) -> dict:
+    def process_message(self, user_input: str, chat_history: list = None) -> dict:
         """
         Main entry point - process a user message and return a response.
 
         Args:
             user_input: What the user said
+            chat_history: Optional list of previous messages for context
+                         Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}, ...]
 
         Returns:
             Dict with:
@@ -98,7 +100,7 @@ class GymBroOrchestrator:
             #   "session_data": None
             # }
 
-            result = orchestrator.process_message("Let's do legs")
+            result = orchestrator.process_message("Let's do legs", chat_history=[...])
             # {
             #   "intent": "chat",
             #   "handler": "chat_agent",
@@ -117,7 +119,7 @@ class GymBroOrchestrator:
         print(f"🎯 Intent: {intent}")
 
         # Step 2: Route to appropriate handler
-        handler_name, response, session_data = self._route_to_handler(intent, user_input)
+        handler_name, response, session_data = self._route_to_handler(intent, user_input, chat_history)
 
         # Step 3: Return structured result
         return {
@@ -127,20 +129,21 @@ class GymBroOrchestrator:
             "session_data": session_data
         }
 
-    def _route_to_handler(self, intent: str, user_input: str) -> tuple[str, str]:
+    def _route_to_handler(self, intent: str, user_input: str, chat_history: list = None) -> tuple[str, str]:
         """
         Internal method to route to the correct handler based on intent.
 
         Args:
             intent: The classified intent (log, query, recommend, chat, admin)
             user_input: The user's message
+            chat_history: Optional conversation history for context
 
         Returns:
-            Tuple of (handler_name, response)
+            Tuple of (handler_name, response, session_data)
         """
         try:
             if intent == "chat":
-                result = self.chat_agent.chat(user_input)
+                result = self.chat_agent.chat(user_input, chat_history=chat_history)
                 # ChatAgent now returns dict with response + session_data
                 response = result.get("response") if isinstance(result, dict) else result
                 return ("chat_agent", response, result.get("session_data") if isinstance(result, dict) else None)
@@ -171,7 +174,7 @@ class GymBroOrchestrator:
 
             else:
                 # Fallback to chat for unknown intents
-                result = self.chat_agent.chat(user_input)
+                result = self.chat_agent.chat(user_input, chat_history=chat_history)
                 response = result.get("response") if isinstance(result, dict) else result
                 return ("chat_agent_fallback", response, result.get("session_data") if isinstance(result, dict) else None)
 

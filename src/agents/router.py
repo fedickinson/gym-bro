@@ -15,23 +15,29 @@ ROUTER_PROMPT = """You are an intent classifier for a fitness coaching app.
 
 Classify the user's message into one of these intents:
 
-- **log**: User wants to record a workout they did
+- **log**: User wants to record a workout they ALREADY DID
   Examples: "Just did push day", "Logged 3x8 bench at 135", "Here's my workout..."
+  NOTE: If talking about FUTURE workout, use CHAT instead!
 
-- **query**: User is asking about their workout history or data
+- **query**: User is asking about their workout history or PAST data
   Examples: "What did I bench last time?", "How many workouts in October?", "Show my progress"
 
-- **recommend**: User is ASKING for suggestions (not starting a workout)
-  Examples: "What should I do today?", "Any recommendations?", "What's next in my rotation?"
-  NOTE: If user wants to START/CREATE/BEGIN a workout, use CHAT instead!
+- **recommend**: RARELY USED - Only for passive suggestions with NO intent to start
+  Examples: "What should I do today?" (asking, not doing), "Any recommendations?"
+  CRITICAL: If user expresses ANY desire to workout, plan, or start → use CHAT instead!
 
 - **admin**: User wants to edit, delete, or fix existing data
   Examples: "Fix my last workout", "Delete Tuesday's log", "Change the weight to 145"
 
-- **chat**: General conversation, motivation, AND starting/creating workouts
-  Examples: "How are you?", "Is this a good routine?", "Thanks!", "Tell me about progressive overload"
-  Examples: "Let's start", "Let's do it", "Let's create a workout", "Let's begin", "I'm ready"
-  IMPORTANT: If user wants to START, CREATE, or BEGIN a workout → use CHAT!
+- **chat**: DEFAULT for anything workout-related that isn't logging PAST workouts
+  Use this for:
+  - Planning: "I need a workout", "workout for tomorrow", "quick workout", "simple workout"
+  - Starting: "Let's start", "Let's do it", "Let's begin", "I'm ready", "show me the plan"
+  - Discussing: "What will we do?", "Tell me more", "I want details"
+  - General: "How are you?", "Tell me about progressive overload", "Thanks!"
+  - ANY workout with constraints: "I only have dumbbells", "no barbell", "at home"
+
+  CRITICAL RULE: If user mentions they NEED, WANT, or are PLANNING a workout → CHAT!
 
 User message: {user_input}
 
@@ -70,19 +76,25 @@ QUICK_PATTERNS = {
         "just did", "just finished", "here's my workout", "logged",
         "completed my workout", "finished my workout"
     ],
-    "recommend": [
-        "what should i do today", "what should i train", "any recommendations",
-        "what's next in my rotation"
-    ],
     "query": [
         "how many workouts", "what did i bench", "what did i squat",
         "show me my progress", "my workout history"
     ],
     "admin": [
         "delete my last workout", "fix my workout", "remove my log"
+    ],
+    "chat": [
+        # Workout planning/starting phrases
+        "let's start", "let's begin", "let's do", "lets do", "lets start",
+        "i need a workout", "need a workout", "i want to workout",
+        "quick workout", "simple workout", "i'm ready to",
+        "only have dumbbells", "at home workout", "no barbell",
+        "show me the plan", "tell me what we'll do", "what will we do",
+        # General chat
+        "how are you", "thank you", "thanks"
     ]
-    # NOTE: No patterns for "chat" - let uncertain cases fall through to LLM
-    # This ensures action phrases like "let's start", "let's do it" go to chat
+    # NOTE: "What should I do today?" removed from recommend - too ambiguous
+    # Let LLM handle recommendation vs chat distinction for those cases
 }
 
 

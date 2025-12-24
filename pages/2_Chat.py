@@ -187,7 +187,11 @@ if user_input := st.chat_input("Ask me anything..."):
             try:
                 orchestrator = get_orchestrator()
                 # Use process_message to get full result with session_data
-                result = orchestrator.process_message(user_input)
+                # Pass chat history for conversation context (excluding current message already added)
+                result = orchestrator.process_message(
+                    user_input,
+                    chat_history=st.session_state.chat_history[:-1]  # Exclude the message we just added
+                )
 
                 response = result["response"]
                 session_data = result.get("session_data")
