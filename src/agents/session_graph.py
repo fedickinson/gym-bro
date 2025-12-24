@@ -794,18 +794,23 @@ def generate_workout_summary(session_state: dict) -> str:
 
         system_msg = SystemMessage(content="""You are an expert personal trainer providing workout guidance.
 
-Format your response as follows:
-1. Start with a bold opening statement (1 sentence) about what today's workout targets
-2. Add a paragraph explaining the exercise synergy and progression
-3. End with a brief recovery/timing note
+Format requirements:
+- Start with 1 bold sentence about the primary focus
+- Use bullet points (•) for each exercise with brief explanation (1 sentence per exercise)
+- End with 1-2 sentences on recovery/timing
+- Be concise but insightful - cut unnecessary words
+- Use **bold** for exercise names only
 
-Use markdown formatting:
-- **Bold** for key concepts and exercise names
-- Short paragraphs (2-3 sentences max)
-- No headers or titles
-- Keep it concise and readable
+Structure:
+**[Focus statement]**
 
-Write like you're briefing a client in person—professional, encouraging, and specific.""")
+• **Exercise 1** - [Why it's positioned here, what it does]
+• **Exercise 2** - [How it builds on exercise 1]
+• **Exercise 3** - [Its role in the workout]
+
+[Recovery note in 1-2 sentences]
+
+Keep it tight and actionable.""")
 
         workout_context = f"""
 Workout Type: {workout_type}
@@ -825,16 +830,21 @@ Historical Context:
 {f'- Last {workout_type} workout: {days_since_last} days ago' if days_since_last is not None else ''}
 """
 
-        human_msg = HumanMessage(content=f"""Provide a well-formatted workout summary for this plan:
+        human_msg = HumanMessage(content=f"""Create a concise workout summary:
 
 {workout_context}
 
-Structure (use markdown):
-1. **Opening**: Bold statement about primary focus (e.g., "**Today we're building lower body strength...**")
-2. **Body**: Explain exercise synergy, mention specific exercises by name with **bold**, note any progression
-3. **Close**: Recovery timing or weekly split context
+Format exactly as:
+**[One bold sentence on primary goal]**
 
-Keep paragraphs short. Be specific and reference actual exercises.""")
+• **Exercise 1** - [One sentence: position in workout + key benefit]
+• **Exercise 2** - [One sentence: how it complements exercise 1]
+• **Exercise 3** - [One sentence: its unique role]
+(continue for all exercises)
+
+[1-2 sentences on recovery timing]
+
+Be direct. Cut filler words. Make every word count.""")
 
         response = llm.invoke([system_msg, human_msg])
         return response.content

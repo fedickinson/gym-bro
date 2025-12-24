@@ -105,6 +105,24 @@ def render_planning_chat_state():
     workout_summary = session.get('workout_summary')
     if workout_summary:
         st.divider()
+        # Add CSS for larger text and better spacing
+        st.markdown("""
+        <style>
+        div[data-testid="stMarkdownContainer"] p {
+            font-size: 1.1rem !important;
+            line-height: 1.75 !important;
+            margin-bottom: 0.75rem !important;
+        }
+        div[data-testid="stMarkdownContainer"] li {
+            font-size: 1.1rem !important;
+            line-height: 1.75 !important;
+            margin-bottom: 0.75rem !important;
+        }
+        div[data-testid="stMarkdownContainer"] strong {
+            font-weight: 600 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         st.markdown("### 💪 Workout Breakdown")
         st.markdown(workout_summary)
 
