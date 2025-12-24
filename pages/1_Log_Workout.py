@@ -136,11 +136,14 @@ def render_planning_chat_state():
         st.markdown("""
         <style>
         .workout-focus {
-            font-size: 1.25rem;
+            font-size: 1.3rem;
             font-weight: 600;
             color: #4CAF50;
             margin-bottom: 1.5rem;
             line-height: 1.6;
+        }
+        .workout-focus strong {
+            font-weight: 700;
         }
         .exercise-list {
             background: rgba(255, 255, 255, 0.03);
@@ -149,10 +152,15 @@ def render_planning_chat_state():
             margin: 1rem 0;
         }
         .exercise-item {
-            font-size: 1.05rem;
+            font-size: 1.1rem;
             line-height: 1.8;
             margin-bottom: 1.2rem;
             padding-left: 0.5rem;
+        }
+        .exercise-item strong {
+            font-weight: 700;
+            font-size: 1.15rem;
+            color: #FFA726;
         }
         .exercise-item:last-child {
             margin-bottom: 0;
@@ -166,26 +174,38 @@ def render_planning_chat_state():
             border-left: 3px solid #6495ED;
             border-radius: 4px;
         }
+        .recovery-note strong {
+            font-weight: 700;
+        }
         </style>
         """, unsafe_allow_html=True)
 
+        # Helper function to convert markdown bold to HTML
+        def convert_bold(text):
+            import re
+            # Replace **text** with <strong>text</strong>
+            return re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+
         # Render focus statement
         if focus_statement:
-            st.markdown(f'<div class="workout-focus">{focus_statement}</div>', unsafe_allow_html=True)
+            focus_html = convert_bold(focus_statement)
+            st.markdown(f'<div class="workout-focus">{focus_html}</div>', unsafe_allow_html=True)
 
         # Render exercise list
         if exercise_bullets:
             exercises_html = '<div class="exercise-list">'
             for bullet in exercise_bullets:
-                # Remove the bullet character and render
+                # Remove the bullet character and convert markdown
                 exercise_text = bullet.replace('•', '').strip()
-                exercises_html += f'<div class="exercise-item">• {exercise_text}</div>'
+                exercise_html = convert_bold(exercise_text)
+                exercises_html += f'<div class="exercise-item">• {exercise_html}</div>'
             exercises_html += '</div>'
             st.markdown(exercises_html, unsafe_allow_html=True)
 
         # Render recovery note
         if recovery_note:
-            recovery_html = '<div class="recovery-note">' + ' '.join(recovery_note) + '</div>'
+            recovery_text = ' '.join(recovery_note)
+            recovery_html = '<div class="recovery-note">' + convert_bold(recovery_text) + '</div>'
             st.markdown(recovery_html, unsafe_allow_html=True)
 
     st.divider()
