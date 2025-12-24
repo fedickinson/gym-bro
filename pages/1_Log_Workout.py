@@ -475,11 +475,14 @@ def render_session_exercise_preview():
     # Action buttons - CRITICAL: Use container break and direct column attachment
     st.container()  # Force break from any previous column context
 
-    btn_col1, btn_col2 = st.columns(2)
+    # Ask user to confirm before adding
+    st.markdown("**Does this look correct?**")
 
-    # Record Next button
+    btn_col1, btn_col2, btn_col3 = st.columns(3)
+
+    # Confirm and Record Next button
     record_next_clicked = btn_col1.button(
-        "🎙️ Record Next Exercise",
+        "✅ Yes, Record Next",
         type="primary",
         key="record_next_btn",
         use_container_width=True
@@ -487,8 +490,15 @@ def render_session_exercise_preview():
 
     # Finish Workout button
     finish_clicked = btn_col2.button(
-        "✅ Finish Workout",
+        "✅ Yes, Finish",
         key="finish_workout_btn",
+        use_container_width=True
+    )
+
+    # Redo Recording button
+    redo_clicked = btn_col3.button(
+        "❌ No, Redo",
+        key="redo_recording_btn",
         use_container_width=True
     )
 
@@ -539,6 +549,29 @@ def render_session_exercise_preview():
 
         # Move to review state
         st.session_state.log_state = 'session_workout_review'
+        st.rerun()
+
+    if redo_clicked:
+        # User doesn't like the parsed result - let them redo
+
+        # Clear the current parsed exercise (don't add it)
+        session['current_parsed_exercise'] = None
+        st.session_state.workout_session = session
+
+        # Clear cached transcription
+        if 'cached_transcription' in st.session_state:
+            del st.session_state.cached_transcription
+
+        # Reset audio recorder
+        if 'audio_recorder_key' not in st.session_state:
+            st.session_state.audio_recorder_key = 0
+        st.session_state.audio_recorder_key += 1
+
+        # Reset recording mode so they see button options again
+        st.session_state.recording_mode = None
+
+        # Go back to active state to record again
+        st.session_state.log_state = 'session_active'
         st.rerun()
 
 
