@@ -143,10 +143,11 @@ def render_start_workout_button() -> bool:
             key="cancel_planning_btn"
         )
 
-    # Handle cancel
+    # Handle cancel - navigate away from workout page
     if cancel_clicked:
         from src.ui.session import reset_workout_session
         reset_workout_session()
-        st.rerun()
+        # Navigate to home instead of staying on this page
+        st.switch_page("app.py")
 
     return start_clicked

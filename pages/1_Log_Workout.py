@@ -449,7 +449,8 @@ def render_session_active_state():
     if st.button("❌ Cancel Session", key="cancel_session_btn"):
         from src.ui.session import reset_workout_session
         reset_workout_session()
-        st.rerun()
+        # Navigate to home instead of staying on this page
+        st.switch_page("app.py")
 
 
 def _render_deviation_warning(deviation: dict, session: dict):
@@ -625,30 +626,40 @@ def render_session_workout_review():
 
     st.divider()
 
-    # Save button
-    if st.button("💾 Save Workout", type="primary", use_container_width=True):
-        try:
-            from src.agents.session_graph import finish_session
+    # Save and cancel buttons
+    col1, col2 = st.columns([2, 1])
 
-            with st.spinner("Saving workout..."):
-                # Finish and save session
-                final_session = finish_session(session)
+    with col1:
+        if st.button("💾 Save Workout", type="primary", use_container_width=True):
+            try:
+                from src.agents.session_graph import finish_session
 
-            st.session_state.workout_session = final_session
+                with st.spinner("Saving workout..."):
+                    # Finish and save session
+                    final_session = finish_session(session)
 
-            if final_session.get('saved'):
-                # Success - move to saved state
-                st.session_state.log_workflow_state = {
-                    'workout_id': final_session.get('workout_id'),
-                    'saved': True
-                }
-                st.session_state.log_state = 'saved'
-                st.rerun()
-            else:
-                st.error(f"❌ {final_session.get('response', 'Failed to save')}")
+                st.session_state.workout_session = final_session
 
-        except Exception as e:
-            st.error(f"❌ Error saving workout: {str(e)}")
+                if final_session.get('saved'):
+                    # Success - move to saved state
+                    st.session_state.log_workflow_state = {
+                        'workout_id': final_session.get('workout_id'),
+                        'saved': True
+                    }
+                    st.session_state.log_state = 'saved'
+                    st.rerun()
+                else:
+                    st.error(f"❌ {final_session.get('response', 'Failed to save')}")
+
+            except Exception as e:
+                st.error(f"❌ Error saving workout: {str(e)}")
+
+    with col2:
+        if st.button("❌ Cancel", use_container_width=True):
+            from src.ui.session import reset_workout_session
+            reset_workout_session()
+            # Navigate to home instead of staying on this page
+            st.switch_page("app.py")
 
 
 # ============================================================================
