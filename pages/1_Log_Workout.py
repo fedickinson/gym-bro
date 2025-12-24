@@ -293,21 +293,29 @@ def render_session_active_state():
             render_next_suggestion(next_suggestion)
             st.divider()
 
+            # Check if we have complete data for "exact" mode
+            suggested_weight = next_suggestion.get('suggested_weight_lbs')
+            has_complete_data = suggested_weight is not None
+
             # Show three-button flow: Primary + Secondary
             st.subheader("How would you like to record?")
 
-            # Primary button - happy path
-            if st.button("✅ Yes, I Did This Exactly", key="did_exact_btn", use_container_width=True, type="primary"):
-                st.session_state.recording_mode = 'exact'
-                st.rerun()
+            if has_complete_data:
+                # Primary button - happy path (only show if we have weight)
+                if st.button("✅ Yes, I Did This Exactly", key="did_exact_btn", use_container_width=True, type="primary"):
+                    st.session_state.recording_mode = 'exact'
+                    st.rerun()
 
-            st.caption("or")
+                st.caption("or")
+            else:
+                # No weight suggested - can't use "exact" mode
+                st.info("💡 **Weight not specified** - please tell me what weight you used")
 
-            # Secondary buttons
+            # Secondary buttons (always available)
             col1, col2 = st.columns(2)
 
             with col1:
-                if st.button("📝 With Modifications", key="did_modified_btn", use_container_width=True):
+                if st.button("📝 With Modifications", key="did_modified_btn", use_container_width=True, type="primary" if not has_complete_data else "secondary"):
                     st.session_state.recording_mode = 'modified'
                     st.rerun()
 

@@ -71,11 +71,15 @@ def _render_plan_suggestion(suggestion: dict):
         if suggested_weight:
             st.metric("Weight", f"{suggested_weight:.0f} lbs")
         else:
-            st.metric("Weight", "Your choice")
+            st.metric("Weight", "⚠️ Your choice")
 
     # Show reasoning if available
     if reasoning:
         st.caption(f"💡 {reasoning}")
+
+    # Highlight if weight needs to be specified
+    if not suggested_weight:
+        st.warning("⚠️ You'll need to specify the weight you used")
 
 
 def _render_adaptive_suggestion(suggestion: dict):
@@ -111,11 +115,15 @@ def _render_adaptive_suggestion(suggestion: dict):
         if suggested_weight:
             st.metric("Weight", f"{suggested_weight:.0f} lbs")
         else:
-            st.metric("Weight", "Your choice")
+            st.metric("Weight", "⚠️ Your choice")
 
     # Show reasoning
     if reasoning:
         st.info(f"💡 {reasoning}")
+
+    # Highlight if weight needs to be specified
+    if not suggested_weight:
+        st.warning("⚠️ You'll need to specify the weight you used")
 
 
 def render_suggestion_prompt():
