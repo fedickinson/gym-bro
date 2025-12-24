@@ -324,7 +324,7 @@ def render_session_active_state():
             st.rerun()
 
         # Handle 'modified' and 'different' modes - need user input
-        elif st.session_state.recording_mode in ['modified', 'different']:
+        if st.session_state.recording_mode in ['modified', 'different']:
             # Show appropriate prompt based on mode
             if st.session_state.recording_mode == 'modified' and next_suggestion:
                 suggested_name = next_suggestion.get('exercise_name')
@@ -358,36 +358,52 @@ def render_session_active_state():
                             context=parse_context
                         )
 
-                    # Store raw input for potential editing
-                    st.session_state.raw_exercise_input = workout_input
-
-                    # Clear cached transcription
-                    if 'cached_transcription' in st.session_state:
-                        del st.session_state.cached_transcription
-
-                    # Reset recording mode for next exercise
-                    st.session_state.recording_mode = None
-
-                    # Update session state
+                    # Update session state first
                     st.session_state.workout_session = updated_session
 
                     # Check if parsing succeeded
                     if updated_session.get('current_parsed_exercise'):
+                        # SUCCESS - Clear state and move to preview
+
+                        # Store raw input for potential editing
+                        st.session_state.raw_exercise_input = workout_input
+
+                        # Clear cached transcription
+                        if 'cached_transcription' in st.session_state:
+                            del st.session_state.cached_transcription
+
+                        # Reset recording mode for next exercise
+                        st.session_state.recording_mode = None
+
                         # Move to preview state
                         st.session_state.log_state = 'session_exercise_preview'
                         st.rerun()
                     else:
-                        # Parsing failed - show helpful error
+                        # PARSING FAILED - Keep recording mode active so they can retry
                         error_msg = updated_session.get('response', 'Could not parse exercise')
                         st.error(f"❌ {error_msg}")
 
                         # Show example if exercise name was missing
                         if "exercise name" in error_msg.lower():
-                            st.info("💡 **Example:** Say 'Bench press, 3 sets of 10 reps at 135 pounds' or use the text box below")
+                            st.info("💡 **Example:** Say 'Bench press, 3 sets of 10 reps at 135 pounds'")
+
+                        st.warning("👆 Try again above, or click 'Back to Options' below to choose a different mode")
 
                 except Exception as e:
+                    # EXCEPTION - Keep recording mode active
                     st.error(f"❌ Failed to parse exercise: {str(e)}")
-                    st.caption("Please try again or use the text input below to correct it")
+                    st.caption("Please try again above or click 'Back to Options' below")
+
+            # Add "Back to Options" button for retry/cancel
+            st.divider()
+            col1, col2 = st.columns([2, 1])
+            with col2:
+                if st.button("⬅️ Back to Options", key="back_to_options_btn", use_container_width=True):
+                    st.session_state.recording_mode = None
+                    # Clear any cached transcription
+                    if 'cached_transcription' in st.session_state:
+                        del st.session_state.cached_transcription
+                    st.rerun()
 
     # Cancel session button
     st.divider()
