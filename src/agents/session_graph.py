@@ -15,6 +15,60 @@ from src.tools.recommend_tools import suggest_next_workout, get_workout_template
 
 
 # ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _infer_workout_type_from_exercises(exercises: list[dict]) -> str | None:
+    """
+    Infer workout type from exercise names as a last resort.
+
+    This is used when session state is missing workout type information.
+    Uses simple keyword matching to classify exercises.
+
+    Args:
+        exercises: List of exercise dicts with 'name' field
+
+    Returns:
+        "Push", "Pull", "Legs", or None if cannot infer
+    """
+    if not exercises:
+        return None
+
+    # Exercise classification keywords
+    push_keywords = {"bench", "press", "chest", "tricep", "shoulder", "dip", "fly", "pushup"}
+    pull_keywords = {"pull", "row", "lat", "back", "bicep", "curl", "chin", "shrug"}
+    leg_keywords = {"squat", "leg", "lunge", "calf", "quad", "hamstring", "glute", "deadlift"}
+
+    # Count votes
+    push_score = 0
+    pull_score = 0
+    leg_score = 0
+
+    for ex in exercises:
+        name_lower = ex.get("name", "").lower()
+
+        # Check for leg exercises first (most specific)
+        if any(keyword in name_lower for keyword in leg_keywords):
+            leg_score += 1
+        elif any(keyword in name_lower for keyword in push_keywords):
+            push_score += 1
+        elif any(keyword in name_lower for keyword in pull_keywords):
+            pull_score += 1
+
+    # Return majority vote
+    max_score = max(push_score, pull_score, leg_score)
+
+    if max_score == 0:
+        return None  # Cannot infer
+    elif push_score == max_score:
+        return "Push"
+    elif pull_score == max_score:
+        return "Pull"
+    else:
+        return "Legs"
+
+
+# ============================================================================
 # State Definition
 # ============================================================================
 
@@ -215,10 +269,34 @@ def save_session_workout(state: SessionWorkoutState) -> SessionWorkoutState:
         }
 
     try:
+        # Determine workout type (CRITICAL for weekly split tracking)
+        workout_type = state.get("actual_workout_type") or intended_type
+
+        # VALIDATION: Ensure type is not null/empty
+        # This prevents weekly split tracking bugs
+        if not workout_type or workout_type == "":
+            # Fallback: Try to infer from suggested_type
+            workout_type = state.get("suggested_type")
+
+            if not workout_type or workout_type == "":
+                # Last resort: Classify by exercises
+                workout_type = _infer_workout_type_from_exercises(exercises)
+
+                if not workout_type:
+                    # Cannot save without a type - this is a critical error
+                    return {
+                        **state,
+                        "saved": False,
+                        "response": (
+                            "❌ Cannot save workout: Unable to determine workout type. "
+                            "This is a system error - please report it."
+                        )
+                    }
+
         # Create workout log
         workout_log = {
             "date": date.today().isoformat(),
-            "type": state.get("actual_workout_type") or intended_type,  # Use actual type if available
+            "type": workout_type,  # Validated - never null
             "exercises": exercises,
             "notes": f"Session logged incrementally (Session ID: {session_id})",
             "completed": True

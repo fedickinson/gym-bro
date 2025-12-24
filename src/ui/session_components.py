@@ -8,64 +8,10 @@ import streamlit as st
 from datetime import datetime
 
 
-def render_session_start():
-    """
-    Render the session start screen with AI suggestion.
-
-    Shows AI's recommended workout type and a button to start the session.
-    """
-    st.title("🎙️ Start Workout Session")
-    st.caption("Log exercises one at a time as you work out")
-
-    # Get AI suggestion for workout type
-    from src.tools.recommend_tools import suggest_next_workout
-
-    try:
-        suggestion = suggest_next_workout.invoke({})
-        suggested_type = suggestion.get('suggested_type', 'Push')
-        reason = suggestion.get('reason', '')
-
-        st.success(f"**Recommended:** {suggested_type}")
-        if reason:
-            st.caption(f"*{reason}*")
-
-        # Start workout button
-        if st.button("Start Workout Session", type="primary", use_container_width=True):
-            # Initialize session
-            from uuid import uuid4
-
-            st.session_state.workout_session = {
-                "session_id": str(uuid4()),
-                "intended_type": suggested_type,
-                "accumulated_exercises": [],
-                "started_at": datetime.now().isoformat(),
-                "last_activity_at": datetime.now().isoformat()
-            }
-            st.session_state.log_state = 'session_active'
-            st.rerun()
-
-    except Exception as e:
-        st.error(f"❌ Could not get workout suggestion: {str(e)}")
-        st.caption("You can still start a session manually")
-
-        # Fallback: manual type selection
-        workout_type = st.selectbox(
-            "Select workout type:",
-            ["Push", "Pull", "Legs", "Upper", "Lower", "Mixed"]
-        )
-
-        if st.button("Start Session", type="primary"):
-            from uuid import uuid4
-
-            st.session_state.workout_session = {
-                "session_id": str(uuid4()),
-                "intended_type": workout_type,
-                "accumulated_exercises": [],
-                "started_at": datetime.now().isoformat(),
-                "last_activity_at": datetime.now().isoformat()
-            }
-            st.session_state.log_state = 'session_active'
-            st.rerun()
+# DEPRECATED: render_session_start() removed 2025-12-24
+# All sessions now go through initialize_planning_session() to ensure proper
+# workout type tracking and weekly split integration.
+# See: src/agents/session_graph.py::initialize_planning_session()
 
 
 def render_exercise_preview(exercise: dict):

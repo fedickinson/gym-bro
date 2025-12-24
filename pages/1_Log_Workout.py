@@ -235,10 +235,9 @@ def render_planning_chat_state():
 # Session Mode Functions
 # ============================================================================
 
-def render_session_start_state():
-    """Render session start screen with AI suggestion."""
-    from src.ui.session_components import render_session_start
-    render_session_start()
+# DEPRECATED: render_session_start_state() removed 2025-12-24
+# This state is never reached - all sessions start via planning_chat state
+# which uses initialize_planning_session() for proper type tracking
 
 
 def render_session_active_state():

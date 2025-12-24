@@ -60,24 +60,38 @@ def get_logs_by_exercise(exercise_name: str) -> list:
     return results
 
 def add_log(log: dict) -> str:
-    """Add a new workout log. Returns the log ID."""
+    """
+    Add a new workout log. Returns the log ID.
+
+    Raises:
+        ValueError: If workout log is missing required 'type' field
+    """
+    # VALIDATION: Ensure workout type is present (critical for weekly split tracking)
+    workout_type = log.get("type")
+    if not workout_type or workout_type == "":
+        raise ValueError(
+            "Cannot save workout without a type. "
+            "This is a system error - workout type should be set before calling add_log(). "
+            f"Log data: {log.get('id', 'unknown')} with {len(log.get('exercises', []))} exercises"
+        )
+
     data = _load_json("workout_logs.json")
     if "logs" not in data:
         data["logs"] = []
-    
+
     # Generate ID if not present
     if "id" not in log:
         date_str = log.get("date", date.today().isoformat())
         count = len([l for l in data["logs"] if l.get("date") == date_str]) + 1
         log["id"] = f"{date_str}-{count:03d}"
-    
+
     log["created_at"] = datetime.now().isoformat()
     data["logs"].append(log)
     _save_json("workout_logs.json", data)
-    
+
     # Update weekly split tracking
     _update_weekly_split_after_log(log)
-    
+
     return log["id"]
 
 def update_log(log_id: str, updates: dict) -> bool:
