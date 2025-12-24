@@ -26,6 +26,7 @@ Architecture:
 
 from src.agents.router import IntentRouter, quick_route
 from src.chains.chat_chain import ChatChain
+from src.agents.chat_agent import ChatAgent
 from src.agents.query_agent import QueryAgent
 from src.agents.recommend_agent import RecommendAgent
 from src.chains.admin_chain import AdminChain
@@ -40,12 +41,10 @@ class GymBroOrchestrator:
 
     Components:
     - Intent Router: Classifies user input → intent
-    - Chat Chain: Handles general conversation
+    - Chat Agent: Handles conversation with data access and workout planning
     - Query Agent: Answers questions about workout history
     - Recommend Agent: Provides workout recommendations
     - Admin Chain: Handles edit/delete operations
-
-    Coming in Phase 3:
     - Log Graph: Multi-step workout logging with confirmation
     """
 
@@ -55,7 +54,7 @@ class GymBroOrchestrator:
 
         This creates instances of:
         - Router (for intent classification)
-        - Chat Chain (for conversation)
+        - Chat Agent (for conversation with data access)
         - Query Agent (for data queries)
         - Recommend Agent (for planning)
         - Admin Chain (for admin operations)
@@ -66,7 +65,8 @@ class GymBroOrchestrator:
         self.router = IntentRouter()
 
         # Handlers for each intent
-        self.chat_chain = ChatChain()
+        self.chat_agent = ChatAgent()  # New: Conversational agent with tools
+        self.chat_chain = ChatChain()  # Kept for backward compatibility
         self.query_agent = QueryAgent()
         self.recommend_agent = RecommendAgent()
         self.admin_chain = AdminChain()
@@ -129,8 +129,8 @@ class GymBroOrchestrator:
         """
         try:
             if intent == "chat":
-                response = self.chat_chain.chat(user_input)
-                return ("chat_chain", response)
+                response = self.chat_agent.chat(user_input)
+                return ("chat_agent", response)
 
             elif intent == "query":
                 response = self.query_agent.query(user_input)
@@ -158,8 +158,8 @@ class GymBroOrchestrator:
 
             else:
                 # Fallback to chat for unknown intents
-                response = self.chat_chain.chat(user_input)
-                return ("chat_chain_fallback", response)
+                response = self.chat_agent.chat(user_input)
+                return ("chat_agent_fallback", response)
 
         except Exception as e:
             # Error handling - return friendly error message

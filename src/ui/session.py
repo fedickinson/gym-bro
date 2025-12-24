@@ -77,6 +77,11 @@ def init_session_state():
         # - 'different': Parse full exercise description
         # - None: Waiting for user to choose mode
 
+    if 'chat_initiated_workout' not in st.session_state:
+        st.session_state.chat_initiated_workout = False
+        # Flag indicating workout session was started from chat
+        # When True, chat page shows "Continue to Workout →" button
+
     # ========================================================================
     # History Page Filters
     # ========================================================================
@@ -135,6 +140,7 @@ def reset_workout_session():
     st.session_state.workout_session = None
     st.session_state.log_state = 'planning_chat'
     st.session_state.recording_mode = None
+    st.session_state.chat_initiated_workout = False
     # Also clear cached transcription
     if 'cached_transcription' in st.session_state:
         del st.session_state.cached_transcription
