@@ -105,26 +105,88 @@ def render_planning_chat_state():
     workout_summary = session.get('workout_summary')
     if workout_summary:
         st.divider()
-        # Add CSS for larger text and better spacing
+        st.markdown("### 💪 Workout Breakdown")
+
+        # Parse and format the summary with better visual structure
+        lines = workout_summary.split('\n')
+        focus_statement = None
+        exercise_bullets = []
+        recovery_note = []
+
+        in_exercises = False
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # First bold line is focus statement
+            if line.startswith('**') and not focus_statement:
+                focus_statement = line
+            # Bullet points are exercises
+            elif line.startswith('•'):
+                exercise_bullets.append(line)
+                in_exercises = True
+            # Everything after bullets is recovery
+            elif in_exercises and not line.startswith('•'):
+                recovery_note.append(line)
+            elif not in_exercises and not line.startswith('**'):
+                recovery_note.append(line)
+
+        # Render with custom styling
         st.markdown("""
         <style>
-        div[data-testid="stMarkdownContainer"] p {
-            font-size: 1.1rem !important;
-            line-height: 1.75 !important;
-            margin-bottom: 0.75rem !important;
+        .workout-focus {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #4CAF50;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
         }
-        div[data-testid="stMarkdownContainer"] li {
-            font-size: 1.1rem !important;
-            line-height: 1.75 !important;
-            margin-bottom: 0.75rem !important;
+        .exercise-list {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
         }
-        div[data-testid="stMarkdownContainer"] strong {
-            font-weight: 600 !important;
+        .exercise-item {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            margin-bottom: 1.2rem;
+            padding-left: 0.5rem;
+        }
+        .exercise-item:last-child {
+            margin-bottom: 0;
+        }
+        .recovery-note {
+            font-size: 1.05rem;
+            line-height: 1.7;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(100, 149, 237, 0.1);
+            border-left: 3px solid #6495ED;
+            border-radius: 4px;
         }
         </style>
         """, unsafe_allow_html=True)
-        st.markdown("### 💪 Workout Breakdown")
-        st.markdown(workout_summary)
+
+        # Render focus statement
+        if focus_statement:
+            st.markdown(f'<div class="workout-focus">{focus_statement}</div>', unsafe_allow_html=True)
+
+        # Render exercise list
+        if exercise_bullets:
+            exercises_html = '<div class="exercise-list">'
+            for bullet in exercise_bullets:
+                # Remove the bullet character and render
+                exercise_text = bullet.replace('•', '').strip()
+                exercises_html += f'<div class="exercise-item">• {exercise_text}</div>'
+            exercises_html += '</div>'
+            st.markdown(exercises_html, unsafe_allow_html=True)
+
+        # Render recovery note
+        if recovery_note:
+            recovery_html = '<div class="recovery-note">' + ' '.join(recovery_note) + '</div>'
+            st.markdown(recovery_html, unsafe_allow_html=True)
 
     st.divider()
 
