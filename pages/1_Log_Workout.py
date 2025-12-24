@@ -254,41 +254,72 @@ def render_session_active_state():
 
     st.divider()
 
-    # Show next exercise suggestion
-    next_suggestion = st.session_state.workout_session.get('next_suggestion') if st.session_state.workout_session else None
+    # Check if plan is complete
+    session = st.session_state.workout_session
+    num_accumulated = len(session.get('accumulated_exercises', []))
+    planned_count = len(session.get('planned_template', {}).get('exercises', []))
+    plan_is_complete = planned_count > 0 and num_accumulated >= planned_count
 
-    if next_suggestion and next_suggestion.get('exercise_name'):
-        # We have a suggestion - show it
-        render_next_suggestion(next_suggestion)
+    # If plan is complete, offer to finish OR continue
+    if plan_is_complete and not st.session_state.get('continue_after_plan'):
+        st.success("🎉 You've completed your planned workout!")
+        st.caption(f"All {planned_count} exercises done. Great work!")
+
         st.divider()
 
-        # Show three-button flow: Primary + Secondary
-        st.subheader("How would you like to record?")
-
-        # Primary button - happy path
-        if st.button("✅ Yes, I Did This Exactly", key="did_exact_btn", use_container_width=True, type="primary"):
-            st.session_state.recording_mode = 'exact'
-            st.rerun()
-
-        st.caption("or")
-
-        # Secondary buttons
         col1, col2 = st.columns(2)
 
         with col1:
-            if st.button("📝 With Modifications", key="did_modified_btn", use_container_width=True):
-                st.session_state.recording_mode = 'modified'
+            if st.button("✅ Finish Workout", key="finish_plan_btn", use_container_width=True, type="primary"):
+                # Go straight to review
+                st.session_state.log_state = 'session_workout_review'
                 st.rerun()
 
         with col2:
-            if st.button("🔄 Different Exercise", key="did_different_btn", use_container_width=True):
-                st.session_state.recording_mode = 'different'
+            if st.button("💪 Add More Exercises", key="continue_plan_btn", use_container_width=True):
+                # Set flag to continue adding
+                st.session_state.continue_after_plan = True
                 st.rerun()
 
+        st.divider()
+        st.caption("Tip: Additional exercises will be marked as bonus exercises")
+
     else:
-        # No suggestion available - skip straight to 'different' mode
-        if st.session_state.recording_mode is None:
-            st.session_state.recording_mode = 'different'
+        # Show next exercise suggestion (normal flow)
+        next_suggestion = session.get('next_suggestion')
+
+        if next_suggestion and next_suggestion.get('exercise_name'):
+            # We have a suggestion - show it
+            render_next_suggestion(next_suggestion)
+            st.divider()
+
+            # Show three-button flow: Primary + Secondary
+            st.subheader("How would you like to record?")
+
+            # Primary button - happy path
+            if st.button("✅ Yes, I Did This Exactly", key="did_exact_btn", use_container_width=True, type="primary"):
+                st.session_state.recording_mode = 'exact'
+                st.rerun()
+
+            st.caption("or")
+
+            # Secondary buttons
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("📝 With Modifications", key="did_modified_btn", use_container_width=True):
+                    st.session_state.recording_mode = 'modified'
+                    st.rerun()
+
+            with col2:
+                if st.button("🔄 Different Exercise", key="did_different_btn", use_container_width=True):
+                    st.session_state.recording_mode = 'different'
+                    st.rerun()
+
+        else:
+            # No suggestion available - skip straight to 'different' mode
+            if st.session_state.recording_mode is None:
+                st.session_state.recording_mode = 'different'
 
     # Show recorder if mode is selected
     if st.session_state.recording_mode:

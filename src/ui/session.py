@@ -141,6 +141,7 @@ def reset_workout_session():
     st.session_state.log_state = 'planning_chat'
     st.session_state.recording_mode = None
     st.session_state.chat_initiated_workout = False
+    st.session_state.continue_after_plan = False  # Clear plan completion flag
     # Also clear cached transcription
     if 'cached_transcription' in st.session_state:
         del st.session_state.cached_transcription

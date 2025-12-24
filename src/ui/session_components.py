@@ -169,10 +169,26 @@ def render_session_progress(session: dict):
     Args:
         session: Workout session dict
     """
-    num_exercises = len(session.get('accumulated_exercises', []))
+    num_accumulated = len(session.get('accumulated_exercises', []))
     intended_type = session.get('intended_type', 'Unknown')
+    planned_template = session.get('planned_template', {})
+    planned_count = len(planned_template.get('exercises', []))
 
-    st.caption(f"**{intended_type} Session:** {num_exercises} exercise{'s' if num_exercises != 1 else ''} logged")
+    # Show progress relative to plan (if plan exists)
+    if planned_count > 0:
+        if num_accumulated < planned_count:
+            # Still working through plan
+            st.caption(f"**{intended_type} Session:** {num_accumulated}/{planned_count} planned exercises completed")
+        elif num_accumulated == planned_count:
+            # Exactly completed plan
+            st.success(f"✅ **Plan Complete!** {planned_count}/{planned_count} exercises done")
+        else:
+            # Exceeded plan (bonus exercises)
+            bonus = num_accumulated - planned_count
+            st.success(f"✅ **Plan Complete!** {planned_count} exercises + {bonus} bonus")
+    else:
+        # No plan - just show count (legacy behavior)
+        st.caption(f"**{intended_type} Session:** {num_accumulated} exercise{'s' if num_accumulated != 1 else ''} logged")
 
 
 def render_coaching_panel(next_suggestion: str = None, balance: dict = None, progress: str = None):
