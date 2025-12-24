@@ -770,10 +770,14 @@ def generate_workout_summary(session_state: dict) -> str:
             if weight:
                 ex_detail += f" @ {weight:.0f} lbs"
 
+            # Include reasoning about weights/progression
             reasoning = ex.get('reasoning', '')
-            if reasoning and 'last workout' in reasoning.lower():
-                # Extract key progression info
-                ex_detail += f" ({reasoning[:60]}...)" if len(reasoning) > 60 else f" ({reasoning})"
+            if reasoning:
+                # Truncate if too long, but keep key progression info
+                if len(reasoning) > 80:
+                    ex_detail += f" (Reasoning: {reasoning[:80]}...)"
+                else:
+                    ex_detail += f" (Reasoning: {reasoning})"
 
             exercise_details.append(ex_detail)
 
@@ -834,17 +838,24 @@ Historical Context:
 
 {workout_context}
 
+IMPORTANT: Reference specific weights when provided. Mention if they represent progression, maintenance, or deload.
+
 Format exactly as:
 **[One bold sentence on primary goal]**
 
-• **Exercise 1** - [One sentence: position in workout + key benefit]
-• **Exercise 2** - [One sentence: how it complements exercise 1]
-• **Exercise 3** - [One sentence: its unique role]
+• **Exercise 1** - [Include weight if provided. Explain why this weight/position makes sense]
+• **Exercise 2** - [Include weight if provided. How it complements exercise 1]
+• **Exercise 3** - [Include weight if provided. Its unique role]
 (continue for all exercises)
 
-[1-2 sentences on recovery timing]
+[1-2 sentences on recovery timing or progression context]
 
-Be direct. Cut filler words. Make every word count.""")
+Examples:
+- "**Squat** at 185 lbs - Heavy opener while CNS is fresh, progressing from last week's 180"
+- "**Leg Press** at 225 lbs - Maintains intensity with reduced stabilizer demands"
+- "**Leg Curl** - Target hamstrings for balance (choose weight based on feel)"
+
+Be direct. Make weights part of the analysis, not just numbers.""")
 
         response = llm.invoke([system_msg, human_msg])
         return response.content
