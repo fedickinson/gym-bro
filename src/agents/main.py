@@ -85,6 +85,7 @@ class GymBroOrchestrator:
             - intent: The classified intent
             - response: The handler's response
             - handler: Which handler was used
+            - session_data: Session data if workout session was created (or None)
 
         Example:
             orchestrator = GymBroOrchestrator()
@@ -93,7 +94,16 @@ class GymBroOrchestrator:
             # {
             #   "intent": "query",
             #   "handler": "query_agent",
-            #   "response": "Your bench press PR is 135 lbs!"
+            #   "response": "Your bench press PR is 135 lbs!",
+            #   "session_data": None
+            # }
+
+            result = orchestrator.process_message("Let's do legs")
+            # {
+            #   "intent": "chat",
+            #   "handler": "chat_agent",
+            #   "response": "Perfect! I've created...",
+            #   "session_data": {...}  # Full session state
             # }
         """
         # Step 1: Classify intent
@@ -107,13 +117,14 @@ class GymBroOrchestrator:
         print(f"🎯 Intent: {intent}")
 
         # Step 2: Route to appropriate handler
-        handler_name, response = self._route_to_handler(intent, user_input)
+        handler_name, response, session_data = self._route_to_handler(intent, user_input)
 
         # Step 3: Return structured result
         return {
             "intent": intent,
             "handler": handler_name,
-            "response": response
+            "response": response,
+            "session_data": session_data
         }
 
     def _route_to_handler(self, intent: str, user_input: str) -> tuple[str, str]:
@@ -129,21 +140,23 @@ class GymBroOrchestrator:
         """
         try:
             if intent == "chat":
-                response = self.chat_agent.chat(user_input)
-                return ("chat_agent", response)
+                result = self.chat_agent.chat(user_input)
+                # ChatAgent now returns dict with response + session_data
+                response = result.get("response") if isinstance(result, dict) else result
+                return ("chat_agent", response, result.get("session_data") if isinstance(result, dict) else None)
 
             elif intent == "query":
                 response = self.query_agent.query(user_input)
-                return ("query_agent", response)
+                return ("query_agent", response, None)
 
             elif intent == "recommend":
                 response = self.recommend_agent.recommend(user_input)
-                return ("recommend_agent", response)
+                return ("recommend_agent", response, None)
 
             elif intent == "admin":
                 # For now, just use the delete latest demo
                 response = self.admin_chain.handle_delete_latest()
-                return ("admin_chain", response)
+                return ("admin_chain", response, None)
 
             elif intent == "log":
                 # Phase 3: LangGraph workout logging!
@@ -154,16 +167,17 @@ class GymBroOrchestrator:
                 # Note: In a real Streamlit app, we'd return the state
                 # and wait for user confirmation. For CLI demo, we auto-approve.
                 # See log_graph.py for full implementation.
-                return ("log_graph", response)
+                return ("log_graph", response, None)
 
             else:
                 # Fallback to chat for unknown intents
-                response = self.chat_agent.chat(user_input)
-                return ("chat_agent_fallback", response)
+                result = self.chat_agent.chat(user_input)
+                response = result.get("response") if isinstance(result, dict) else result
+                return ("chat_agent_fallback", response, result.get("session_data") if isinstance(result, dict) else None)
 
         except Exception as e:
             # Error handling - return friendly error message
-            return ("error", f"Oops! Something went wrong: {str(e)}")
+            return ("error", f"Oops! Something went wrong: {str(e)}", None)
 
     def chat(self, user_input: str) -> str:
         """

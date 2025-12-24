@@ -184,7 +184,7 @@ class ChatAgent:
             prompt=CHAT_AGENT_PROMPT
         )
 
-    def chat(self, user_input: str, chat_history: list = None) -> str:
+    def chat(self, user_input: str, chat_history: list = None) -> dict:
         """
         Send a message and get a conversational response.
 
@@ -199,22 +199,21 @@ class ChatAgent:
                          Format: [("user", "hi"), ("assistant", "hello!"), ...]
 
         Returns:
-            The agent's response (as a string)
+            Dict with:
+            - response: The agent's text response (string)
+            - session_data: Session data if start_workout_session was called (dict or None)
+            - tool_calls: List of tools that were called (for debugging)
 
         Example:
             agent = ChatAgent()
 
             # General chat - no tools
-            response = agent.chat("How are you?")
-            # → "Hey! I'm doing great, thanks for asking! How's your training going?"
+            result = agent.chat("How are you?")
+            # → {"response": "Hey! ...", "session_data": None, "tool_calls": []}
 
-            # Data question - uses tools
-            response = agent.chat("What did I bench last week?")
-            # → Agent calls get_exercise_history, analyzes, responds with data
-
-            # Recommendation - uses tools
-            response = agent.chat("What should I train today?")
-            # → Agent calls get_weekly_split_status, suggests based on rotation
+            # Start workout - uses start_workout_session
+            result = agent.chat("Let's do legs")
+            # → {"response": "Perfect! I've created...", "session_data": {...}, "tool_calls": ["start_workout_session"]}
         """
         # Build messages list with optional history
         messages = []
@@ -236,8 +235,45 @@ class ChatAgent:
             "messages": messages
         })
 
-        # Return the agent's final response
-        return result["messages"][-1].content
+        # Extract session data if start_workout_session was called
+        session_data = None
+        tool_calls = []
+
+        for message in result["messages"]:
+            # Check message type
+            message_type = message.__class__.__name__
+
+            # Track tool calls (AIMessage with tool_calls)
+            if message_type == "AIMessage" and hasattr(message, 'tool_calls') and message.tool_calls:
+                for tool_call in message.tool_calls:
+                    tool_name = tool_call.get('name', 'unknown')
+                    tool_calls.append(tool_name)
+
+            # Extract tool results (ToolMessage)
+            if message_type == "ToolMessage":
+                # ToolMessage.content is the string representation of the tool return value
+                try:
+                    import ast
+                    # Safely evaluate the string as a Python literal
+                    tool_result = ast.literal_eval(message.content)
+                    if isinstance(tool_result, dict) and tool_result.get('session_data'):
+                        session_data = tool_result['session_data']
+                except:
+                    # If literal_eval fails, try json.loads
+                    try:
+                        import json
+                        tool_result = json.loads(message.content)
+                        if isinstance(tool_result, dict) and tool_result.get('session_data'):
+                            session_data = tool_result['session_data']
+                    except:
+                        pass
+
+        # Return structured response
+        return {
+            "response": result["messages"][-1].content,
+            "session_data": session_data,
+            "tool_calls": tool_calls
+        }
 
 
 # ============================================================================

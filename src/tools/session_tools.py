@@ -3,9 +3,12 @@ Session Tools - Tools for initiating and managing workout sessions.
 
 These tools allow the chat agent to create workout planning sessions
 and bridge between conversational AI and the workout logging UI.
+
+IMPORTANT: These tools return session data but do NOT directly modify
+st.session_state (which isn't available in the agent's thread context).
+The Chat page must detect the tool usage and create the session.
 """
 
-import streamlit as st
 from langchain_core.tools import tool
 from src.agents.session_graph import initialize_planning_session, modify_plan_via_chat
 
@@ -18,6 +21,9 @@ def start_workout_session(workout_type: str = None, equipment_unavailable: str =
     This creates a complete workout plan with AI recommendations and prepares
     the user to start logging their workout.
 
+    IMPORTANT: This tool returns session data but does NOT modify st.session_state
+    (not available in agent thread). The Chat UI must handle session creation.
+
     Args:
         workout_type: Optional specific workout type to do
                      (Push/Pull/Legs/Upper/Lower). If None, AI will suggest
@@ -29,6 +35,7 @@ def start_workout_session(workout_type: str = None, equipment_unavailable: str =
         Dict with session creation result:
         - success: True/False
         - message: Description of what happened
+        - session_data: The full session state dict (if successful)
         - session_id: ID of created session (if successful)
         - suggested_type: What workout type was planned
         - exercise_count: Number of exercises in the plan
@@ -44,32 +51,6 @@ def start_workout_session(workout_type: str = None, equipment_unavailable: str =
         start_workout_session(equipment_unavailable="Barbell,Leg Press")
         → Creates session avoiding barbell and leg press exercises
     """
-    # ========================================================================
-    # Risk Mitigation #1: Session Conflict Detection
-    # ========================================================================
-
-    # Check if there's already an active session
-    if st.session_state.get('workout_session') is not None:
-        existing_session = st.session_state.workout_session
-        existing_type = existing_session.get('suggested_type', 'Unknown')
-        exercise_count = len(existing_session.get('accumulated_exercises', []))
-
-        return {
-            "success": False,
-            "error": "active_session_exists",
-            "message": (
-                f"You already have an active {existing_type} workout session "
-                f"with {exercise_count} exercises logged. Please finish or "
-                f"cancel your current workout before starting a new one."
-            ),
-            "existing_type": existing_type,
-            "existing_exercise_count": exercise_count
-        }
-
-    # ========================================================================
-    # Create New Session
-    # ========================================================================
-
     try:
         # Initialize the planning session (gets AI recommendation and template)
         session_state = initialize_planning_session()
@@ -95,6 +76,7 @@ def start_workout_session(workout_type: str = None, equipment_unavailable: str =
                 session_state = modify_plan_via_chat(session_state, modification_request)
 
         # Apply equipment constraints if provided
+        equipment_list = None
         if equipment_unavailable:
             # Parse comma-separated equipment list
             equipment_list = [e.strip() for e in equipment_unavailable.split(',')]
@@ -106,14 +88,7 @@ def start_workout_session(workout_type: str = None, equipment_unavailable: str =
             session_state = modify_plan_via_chat(session_state, modification_request)
 
         # ====================================================================
-        # Store in Streamlit Session State
-        # ====================================================================
-
-        st.session_state.workout_session = session_state
-        st.session_state.chat_initiated_workout = True
-
-        # ====================================================================
-        # Build Success Response
+        # Build Success Response (return session data, don't store it)
         # ====================================================================
 
         suggested_type = session_state.get('suggested_type', 'Unknown')
@@ -122,14 +97,16 @@ def start_workout_session(workout_type: str = None, equipment_unavailable: str =
 
         return {
             "success": True,
+            "session_data": session_state,  # Return full session for UI to store
             "message": (
-                f"Great! I've created a {suggested_type} workout for you with "
-                f"{exercise_count} exercises. {suggestion_reason}"
+                f"Perfect! I've created a {suggested_type} workout for you with "
+                f"{exercise_count} exercises. {suggestion_reason} "
+                f"Click 'Continue to Workout →' below to start logging!"
             ),
             "session_id": session_state.get('session_id'),
             "suggested_type": suggested_type,
             "exercise_count": exercise_count,
-            "equipment_unavailable": equipment_list if equipment_unavailable else None
+            "equipment_unavailable": equipment_list
         }
 
     except Exception as e:

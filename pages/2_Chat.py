@@ -186,14 +186,25 @@ if user_input := st.chat_input("Ask me anything..."):
         with st.spinner("Thinking..."):
             try:
                 orchestrator = get_orchestrator()
-                response = orchestrator.chat(user_input)
+                # Use process_message to get full result with session_data
+                result = orchestrator.process_message(user_input)
+
+                response = result["response"]
+                session_data = result.get("session_data")
 
                 # Display response
                 st.write(response)
 
+                # If a workout session was created, store it in session state
+                if session_data:
+                    st.session_state.workout_session = session_data
+                    st.session_state.chat_initiated_workout = True
+                    st.session_state.log_state = 'planning_chat'  # Set to planning state
+
                 # Add assistant message to history with metadata
-                # (orchestrator.chat doesn't return agent info, but we can add it later if needed)
-                add_chat_message("assistant", response, agent="orchestrator")
+                add_chat_message("assistant", response,
+                                agent=result.get("handler", "orchestrator"),
+                                intent=result.get("intent"))
 
             except Exception as e:
                 error_msg = f"Sorry, I encountered an error: {str(e)}"
