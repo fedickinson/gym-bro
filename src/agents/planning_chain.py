@@ -47,7 +47,18 @@ INSTRUCTIONS:
 3. If equipment is mentioned as unavailable, find suitable alternatives that work the same muscle groups
 4. Maintain the workout type (Push/Pull/Legs) unless user explicitly asks to change it
 5. Keep target sets/reps similar unless user asks to change volume
-6. Provide a brief 1-2 sentence explanation of what changed
+6. **IMPORTANT: For suggested_weight_lbs:**
+   - ALWAYS include this field for weighted exercises
+   - If the user has exercise history, use progressive overload (last weight + 2.5-5 lbs)
+   - If no history (new user), suggest beginner-friendly starting weights:
+     * Compound upper (bench, rows, press): 20-30 lbs dumbbells / 45-95 lbs barbell
+     * Compound lower (squat, deadlift): 65-135 lbs (bar + light plates)
+     * Isolation upper (curls, raises, extensions): 10-20 lbs dumbbells / 20-40 lbs cable
+     * Isolation lower (leg curl, extension): 40-70 lbs machine
+     * Bodyweight (pull-ups, dips, push-ups): null (suggest assisted variations if needed)
+   - Always err on the conservative side for safety
+   - Include reasoning mentioning "beginner weight" if applicable
+7. Provide a brief 1-2 sentence explanation of what changed
 
 Return your response in this JSON format:
 {{

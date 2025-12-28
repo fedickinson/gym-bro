@@ -88,17 +88,20 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
                 else:
                     suggested_weight = last_weight  # maintain
             else:
-                suggested_weight = None  # No history for this exercise yet
+                # No history for this exercise yet - use beginner weight
+                from src.agents.suggestion_engine import _get_beginner_weight
+                suggested_weight, _ = _get_beginner_weight(exercise_name)
 
             # Determine sets/reps (use user's typical or template default)
             user_avg_sets = _get_avg_sets_for_exercise(exercise_name, patterns)
             target_sets = int(user_avg_sets) if user_avg_sets else exercise.get("target_sets", 4)
             reasoning = _build_reasoning(exercise_name, progression, history)
         else:
-            # No history - use template defaults
-            suggested_weight = None
+            # No history - use beginner weight from catalog
+            from src.agents.suggestion_engine import _get_beginner_weight
+            suggested_weight, beginner_reasoning = _get_beginner_weight(exercise_name)
             target_sets = exercise.get("target_sets", 4)
-            reasoning = "Start with a weight you can do comfortably"
+            reasoning = beginner_reasoning
 
         # Build adapted exercise
         adapted_exercises.append({
