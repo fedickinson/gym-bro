@@ -227,7 +227,7 @@ def render_planning_chat_state():
     if render_start_workout_button():
         # Lock plan and begin workout
         st.session_state.recording_mode = None  # Reset recording mode for first exercise
-        st.session_state.log_state = 'session_active'
+        st.session_state.log_state = 'session_exercise_intro'  # Show intro for first exercise
         st.rerun()
 
 
@@ -240,12 +240,333 @@ def render_planning_chat_state():
 # which uses initialize_planning_session() for proper type tracking
 
 
+def render_multi_set_choice_dialog(parsed_sets: list[dict]) -> str | None:
+    """
+    Show dialog when multiple sets detected in user's recording.
+
+    Returns: "first_only" | "all_sets" | "cancel" | None
+    """
+    st.warning(f"📊 **{len(parsed_sets)} sets detected in your recording**")
+
+    # Show what was detected
+    sets_preview = ", ".join([f"{s.get('reps')} reps" for s in parsed_sets[:3]])
+    if len(parsed_sets) > 3:
+        sets_preview += f" + {len(parsed_sets) - 3} more"
+    st.caption(f"Detected: {sets_preview}")
+
+    st.divider()
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        first_set = parsed_sets[0]
+        weight = first_set.get('weight_lbs')
+        reps = first_set.get('reps')
+        label = f"📝 First Set Only\n{reps} reps"
+        if weight:
+            label += f" @ {weight:.0f} lbs"
+
+        if st.button(label, key="multi_choice_first", use_container_width=True):
+            return "first_only"
+
+    with col2:
+        if st.button(
+            f"✅ All {len(parsed_sets)} Sets\nFinish Exercise",
+            key="multi_choice_all",
+            use_container_width=True,
+            type="primary"
+        ):
+            return "all_sets"
+
+    with col3:
+        if st.button(
+            "❌ Cancel\nRe-record",
+            key="multi_choice_cancel",
+            use_container_width=True
+        ):
+            return "cancel"
+
+    return None
+
+
+def render_early_finish_confirmation(
+    planned_sets: int,
+    completed_sets: int,
+    confirm_yes_key: str,
+    confirm_no_key: str,
+    on_confirm_state: str = 'session_exercise_complete'
+) -> None:
+    """
+    Render confirmation dialog for finishing exercise early.
+
+    Args:
+        planned_sets: Number of sets originally planned
+        completed_sets: Number of sets actually completed
+        confirm_yes_key: Unique key for "Yes" button
+        confirm_no_key: Unique key for "No" button
+        on_confirm_state: State to transition to when confirmed
+    """
+    st.warning(f"⚠️ **Finish early?**")
+    st.caption(f"You planned {planned_sets} sets but completed {completed_sets}.")
+
+    confirm_col1, confirm_col2 = st.columns(2)
+
+    with confirm_col1:
+        if st.button("Yes, I'm Done", key=confirm_yes_key, use_container_width=True, type="primary"):
+            # Clear confirmation flags
+            if 'confirm_early_finish_active' in st.session_state:
+                st.session_state.confirm_early_finish_active = False
+            if 'confirm_early_finish_preview' in st.session_state:
+                st.session_state.confirm_early_finish_preview = False
+
+            # Clear timer
+            if 'rest_start_time' in st.session_state:
+                del st.session_state.rest_start_time
+            if 'rest_duration' in st.session_state:
+                del st.session_state.rest_duration
+
+            # Transition to next state
+            st.session_state.log_state = on_confirm_state
+            print(f"✅ EARLY FINISH CONFIRMED ({completed_sets}/{planned_sets} sets)")
+            st.rerun()
+
+    with confirm_col2:
+        if st.button("No, Continue", key=confirm_no_key, use_container_width=True):
+            # Clear confirmation flags
+            if 'confirm_early_finish_active' in st.session_state:
+                st.session_state.confirm_early_finish_active = False
+            if 'confirm_early_finish_preview' in st.session_state:
+                st.session_state.confirm_early_finish_preview = False
+            st.rerun()
+
+
+def render_session_exercise_intro():
+    """
+    Render exercise introduction screen before Set 1.
+
+    Shows:
+    - Exercise name prominently
+    - Exercise info (muscle groups, equipment, category)
+    - Plan details (sets, reps, weight, rest)
+    - Beginner guidance (if first time doing this exercise)
+    - Options: Start / Different / Skip / Cancel
+    """
+    from src.ui.session_components import render_session_progress
+    from src.agents.session_graph import generate_next_set_suggestion
+    from src.agents.suggestion_engine import get_exercise_info
+
+    st.title("💪 Next Exercise")
+
+    session = st.session_state.workout_session
+
+    # Show session progress
+    if session:
+        render_session_progress(session)
+
+    st.divider()
+
+    # Get suggestion for Set 1 of this exercise
+    set_suggestion = generate_next_set_suggestion(session)
+
+    if not set_suggestion:
+        # No more exercises
+        st.warning("No more exercises in your plan!")
+        if st.button("Finish Workout", type="primary"):
+            st.session_state.log_state = 'session_workout_review'
+            st.rerun()
+        return
+
+    # Extract exercise details
+    exercise_name = set_suggestion.get('exercise_name', 'Unknown')
+    target_reps = set_suggestion.get('target_reps', 10)
+    suggested_weight = set_suggestion.get('suggested_weight_lbs')
+    rest_seconds = set_suggestion.get('rest_seconds', 90)
+
+    # Get target_sets from planned template
+    current_index = session.get('current_exercise_index', 0)
+    planned_exercises = session.get('planned_template', {}).get('exercises', [])
+    if current_index < len(planned_exercises):
+        target_sets = planned_exercises[current_index].get('target_sets', 4)
+    else:
+        target_sets = 4
+
+    # Get exercise information from catalog
+    exercise_info = get_exercise_info(exercise_name)
+
+    # Large exercise name display
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        margin: 20px 0;
+    ">
+        <h1 style="color: white; margin: 0; font-size: 2.5em;">
+            {exercise_info.get('canonical_name', exercise_name)}
+        </h1>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Exercise information (muscle groups, equipment, category)
+    if exercise_info.get('found_in_catalog'):
+        st.markdown("### 🎯 Exercise Details")
+
+        info_col1, info_col2 = st.columns(2)
+
+        with info_col1:
+            muscle_groups = exercise_info.get('muscle_groups', [])
+            if muscle_groups:
+                st.caption("**Targets:**")
+                for muscle in muscle_groups:
+                    st.caption(f"• {muscle}")
+
+        with info_col2:
+            equipment = exercise_info.get('equipment', [])
+            category = exercise_info.get('category', '').title()
+
+            if equipment:
+                st.caption("**Equipment:**")
+                st.caption(", ".join(equipment))
+
+            if category:
+                st.caption("**Type:**")
+                st.caption(f"{category}")
+
+        # First-time beginner guidance
+        if exercise_info.get('is_first_time'):
+            weight_reasoning = exercise_info.get('weight_reasoning', '')
+            if weight_reasoning:
+                st.info(f"💡 **First time?** {weight_reasoning}")
+
+        st.divider()
+
+    # Plan summary
+    st.subheader("📋 Workout Plan")
+
+    plan_col1, plan_col2 = st.columns(2)
+
+    with plan_col1:
+        st.metric("Sets", f"{target_sets} sets")
+        st.metric("Reps per Set", f"{target_reps} reps")
+
+    with plan_col2:
+        if suggested_weight:
+            st.metric("Suggested Weight", f"{suggested_weight:.0f} lbs")
+        else:
+            st.metric("Weight", "Choose your weight")
+        st.metric("Rest Between Sets", f"{rest_seconds}s")
+
+    st.divider()
+
+    # Primary action: Start Exercise
+    if st.button(
+        "▶️  Start Exercise",
+        key="start_exercise_btn",
+        use_container_width=True,
+        type="primary",
+        help="Begin recording Set 1"
+    ):
+        # Transition to session_active for Set 1 recording
+        st.session_state.log_state = 'session_active'
+        print(f"▶️ STARTING EXERCISE: {exercise_name}")
+        st.rerun()
+
+    st.divider()
+    st.caption("Other Options:")
+
+    # Secondary options (3 columns)
+    opt_col1, opt_col2, opt_col3 = st.columns(3)
+
+    with opt_col1:
+        if st.button("🔄 Different Exercise", key="intro_different_btn", use_container_width=True):
+            # Go to different exercise mode
+            st.session_state.recording_mode = 'different'
+            st.session_state.log_state = 'session_active'
+            print(f"🔄 CHOOSING DIFFERENT EXERCISE (was: {exercise_name})")
+            st.rerun()
+
+    with opt_col2:
+        if st.button("⏭️ Skip Exercise", key="intro_skip_btn", use_container_width=True):
+            # Ask for confirmation
+            st.session_state.confirm_skip_exercise = True
+            st.rerun()
+
+    with opt_col3:
+        if st.button("❌ Cancel Session", key="intro_cancel_btn", use_container_width=True):
+            # Cancel the entire workout
+            if st.session_state.get('confirm_cancel_session'):
+                # Confirmed - actually cancel
+                st.session_state.workout_session = None
+                st.session_state.log_state = 'idle'
+                st.session_state.confirm_cancel_session = False
+                print("❌ SESSION CANCELLED")
+                st.rerun()
+            else:
+                # Ask for confirmation
+                st.session_state.confirm_cancel_session = True
+                st.rerun()
+
+    # Show skip confirmation if flag is set
+    if st.session_state.get('confirm_skip_exercise'):
+        st.divider()
+        st.warning(f"⚠️ **Skip {exercise_name}?**")
+        st.caption("This exercise will not be logged.")
+
+        skip_col1, skip_col2 = st.columns(2)
+        with skip_col1:
+            if st.button("Yes, Skip It", key="confirm_skip_yes", type="primary", use_container_width=True):
+                # Skip this exercise and show intro for next
+                print(f"⏭️ SKIP EXERCISE (from intro): {exercise_name}")
+
+                # Clear state
+                st.session_state.workout_session['in_progress_exercise'] = None
+                st.session_state.workout_session['current_set_number'] = 0
+                st.session_state.workout_session['target_sets'] = 0
+                st.session_state.workout_session['current_set_suggestion'] = None
+                st.session_state.workout_session['next_suggestion'] = None
+
+                # Increment exercise index
+                current_index = session.get('current_exercise_index', 0)
+                st.session_state.workout_session['current_exercise_index'] = current_index + 1
+
+                # Clear confirmation flag
+                st.session_state.confirm_skip_exercise = False
+
+                print(f"   Moving to exercise index {current_index + 1}")
+                # Stay in session_exercise_intro to show next exercise
+                st.rerun()
+        with skip_col2:
+            if st.button("No, Do This Exercise", key="confirm_skip_no", use_container_width=True):
+                st.session_state.confirm_skip_exercise = False
+                st.rerun()
+
+    # Show cancel confirmation if flag is set
+    if st.session_state.get('confirm_cancel_session'):
+        st.divider()
+        st.warning("⚠️ **Cancel entire workout session?**")
+        st.caption("All progress will be lost.")
+
+        conf_col1, conf_col2 = st.columns(2)
+        with conf_col1:
+            if st.button("Yes, Cancel Session", key="confirm_cancel_yes", type="primary", use_container_width=True):
+                st.session_state.workout_session = None
+                st.session_state.log_state = 'idle'
+                st.session_state.confirm_cancel_session = False
+                st.rerun()
+        with conf_col2:
+            if st.button("No, Continue", key="confirm_cancel_no", use_container_width=True):
+                st.session_state.confirm_cancel_session = False
+                st.rerun()
+
+
 def render_session_active_state():
-    """Render exercise recording screen for session mode."""
+    """Render SET recording screen for session mode (set-by-set flow)."""
     from src.ui.session_components import render_session_progress
     from src.ui.suggestion_components import render_next_suggestion
+    from src.agents.session_graph import generate_next_set_suggestion
 
-    st.title("🎙️ Record Exercise")
+    st.title("🎙️ Record Set")
 
     # Show session progress
     if st.session_state.workout_session:
@@ -258,6 +579,15 @@ def render_session_active_state():
     num_accumulated = len(session.get('accumulated_exercises', []))
     planned_count = len(session.get('planned_template', {}).get('exercises', []))
     plan_is_complete = planned_count > 0 and num_accumulated >= planned_count
+
+    # Generate set suggestion for this specific set
+    set_suggestion = generate_next_set_suggestion(session)
+
+    # DEBUG: Log suggestion details
+    if set_suggestion:
+        print(f"🟢 Generated suggestion for: {set_suggestion.get('exercise_name')} - Set {set_suggestion.get('set_number')}")
+        print(f"   Exercise index: {session.get('current_exercise_index')}")
+        print(f"   In progress: {session.get('in_progress_exercise', {}).get('name') if session.get('in_progress_exercise') else 'None'}")
 
     # If plan is complete, offer to finish OR continue
     if plan_is_complete and not st.session_state.get('continue_after_plan'):
@@ -284,47 +614,111 @@ def render_session_active_state():
         st.caption("Tip: Additional exercises will be marked as bonus exercises")
 
     else:
-        # Show next exercise suggestion (normal flow)
-        next_suggestion = session.get('next_suggestion')
+        # Show next SET suggestion (set-by-set flow)
+        if set_suggestion:
+            # We have a set suggestion - show it prominently
+            exercise_name = set_suggestion.get('exercise_name', 'Unknown')
+            set_number = set_suggestion.get('set_number', 1)
+            target_reps = set_suggestion.get('target_reps', 10)
+            suggested_weight = set_suggestion.get('suggested_weight_lbs')
+            rest_seconds = set_suggestion.get('rest_seconds', 90)
 
-        if next_suggestion and next_suggestion.get('exercise_name'):
-            # We have a suggestion - show it
-            render_next_suggestion(next_suggestion)
-            st.divider()
+            # Check if this is a new exercise or continuing set
+            in_progress = session.get('in_progress_exercise')
+            target_sets = session.get('target_sets', 0)
+
+            # Show set header
+            st.success(f"🎯 **{exercise_name}**")
+
+            # Show set number prominently
+            if target_sets > 0:
+                st.subheader(f"Set {set_number} of {target_sets}")
+            else:
+                st.subheader(f"Set {set_number}")
+
+            # Show target for this specific set
+            if suggested_weight:
+                st.info(f"**Target:** {target_reps} reps @ {suggested_weight:.0f} lbs")
+            else:
+                st.info(f"**Target:** {target_reps} reps (choose your weight)")
+
+            st.caption(f"Rest after: {rest_seconds} seconds")
 
             # Check if we have complete data for "exact" mode
-            suggested_weight = next_suggestion.get('suggested_weight_lbs')
             has_complete_data = suggested_weight is not None
 
-            # Show three-button flow: Primary + Secondary
-            st.subheader("How would you like to record?")
+            st.divider()
+            st.subheader("Record What You Did")
+            st.caption("Complete this set, then record your results:")
 
-            if has_complete_data:
-                # Primary button - happy path (only show if we have weight)
-                if st.button("✅ Yes, I Did This Exactly", key="did_exact_btn", use_container_width=True, type="primary"):
-                    st.session_state.recording_mode = 'exact'
-                    st.rerun()
+            # Always show recording interface - let user choose after doing set
+            if st.session_state.recording_mode is None:
+                if has_complete_data:
+                    # Primary button - happy path (only show if we have weight)
+                    if st.button("✅ I Did This Set As Suggested", key="did_exact_btn", use_container_width=True, type="primary"):
+                        st.session_state.recording_mode = 'exact'
+                        st.session_state.set_suggestion_cache = set_suggestion  # Cache for exact mode
+                        st.rerun()
 
-                st.caption("or")
-            else:
-                # No weight suggested - can't use "exact" mode
-                st.info("💡 **Weight not specified** - please tell me what weight you used")
+                    st.caption("or tell me what you actually did:")
+                else:
+                    # No weight suggested - can't use "exact" mode
+                    st.caption("Tell me what you did for this set:")
 
-            # Secondary buttons (always available)
-            col1, col2 = st.columns(2)
+                # Secondary buttons (always available)
+                # Use 3 columns for Set 1, 2 columns for later sets
+                if set_number == 1:
+                    col1, col2, col3 = st.columns(3)
+                else:
+                    col1, col2 = st.columns(2)
 
-            with col1:
-                if st.button("📝 With Modifications", key="did_modified_btn", use_container_width=True, type="primary" if not has_complete_data else "secondary"):
-                    st.session_state.recording_mode = 'modified'
-                    st.rerun()
+                with col1:
+                    if st.button("🎙️ Record This Set", key="did_modified_btn", use_container_width=True, type="primary" if not has_complete_data else "secondary"):
+                        st.session_state.recording_mode = 'modified'
+                        st.session_state.set_suggestion_cache = set_suggestion  # Cache for modified mode
+                        st.rerun()
 
-            with col2:
-                if st.button("🔄 Different Exercise", key="did_different_btn", use_container_width=True):
-                    st.session_state.recording_mode = 'different'
-                    st.rerun()
+                with col2:
+                    # Only show "Different Exercise" if this is the first set
+                    if set_number == 1:
+                        if st.button("🔄 Different Exercise", key="did_different_btn", use_container_width=True):
+                            st.session_state.recording_mode = 'different'
+                            st.rerun()
+                    else:
+                        # Mid-exercise - offer to finish early with confirmation
+                        if st.session_state.get('confirm_early_finish_active'):
+                            # Show confirmation dialog
+                            render_early_finish_confirmation(
+                                planned_sets=target_sets,
+                                completed_sets=set_number - 1,  # -1 because we haven't done this set yet
+                                confirm_yes_key="confirm_active_yes",
+                                confirm_no_key="confirm_active_no"
+                            )
+                        else:
+                            # Show initial finish button
+                            finish_key = f"finish_early_btn_{set_number}"
+                            if st.button("✅ Finish Exercise", key=finish_key, use_container_width=True):
+                                # DEBUG
+                                print(f"🔵 FINISH EXERCISE CLICKED (Set {set_number})")
+                                print(f"   Current state: {st.session_state.log_state}")
+                                print(f"   Current set: {session.get('current_set_number')}/{session.get('target_sets')}")
+                                print(f"   In progress exercise: {session.get('in_progress_exercise', {}).get('name')}")
+
+                                # Set confirmation flag
+                                st.session_state.confirm_early_finish_active = True
+                                st.rerun()
+
+                # Skip Exercise button (only on Set 1)
+                if set_number == 1:
+                    with col3:
+                        if st.button("⏭️ Skip Exercise", key="skip_exercise_btn", use_container_width=True):
+                            # Ask for confirmation
+                            st.session_state.confirm_skip_exercise_active = True
+                            st.rerun()
 
         else:
             # No suggestion available - skip straight to 'different' mode
+            st.subheader("Record What You Did")
             if st.session_state.recording_mode is None:
                 st.session_state.recording_mode = 'different'
 
@@ -332,45 +726,73 @@ def render_session_active_state():
     if st.session_state.recording_mode:
         st.divider()
 
-        # Handle 'exact' mode - auto-fill from suggestion
-        if st.session_state.recording_mode == 'exact' and next_suggestion:
-            # Auto-create exercise from suggestion
-            suggested_name = next_suggestion.get('exercise_name')
-            suggested_sets = next_suggestion.get('target_sets', 3)
-            suggested_reps = next_suggestion.get('target_reps', 10)
-            suggested_weight = next_suggestion.get('suggested_weight_lbs')
+        # Handle 'exact' mode - auto-create single set from suggestion
+        if st.session_state.recording_mode == 'exact':
+            cached_suggestion = st.session_state.get('set_suggestion_cache', {})
+            if cached_suggestion:
+                # Auto-create SINGLE set from suggestion
+                suggested_reps = cached_suggestion.get('target_reps', 10)
+                suggested_weight = cached_suggestion.get('suggested_weight_lbs')
+                set_number = cached_suggestion.get('set_number', 1)
+                exercise_name = cached_suggestion.get('exercise_name')
 
-            # Build exercise from suggestion
-            sets_data = []
-            for i in range(suggested_sets):
-                set_dict = {"reps": suggested_reps}
+                # Build single set
+                set_data = {"reps": suggested_reps}
                 if suggested_weight:
-                    set_dict["weight_lbs"] = suggested_weight
-                sets_data.append(set_dict)
+                    set_data["weight_lbs"] = suggested_weight
 
-            exact_exercise = {
-                "name": suggested_name,
-                "sets": sets_data
-            }
+                # Update or create in_progress_exercise
+                in_progress = session.get('in_progress_exercise')
+                if in_progress is None:
+                    # First set of new exercise - initialize in_progress_exercise
+                    # Get target sets from next_suggestion or default
+                    next_sug = session.get('next_suggestion') or {}
+                    target_sets = next_sug.get('target_sets', 4)
 
-            # Add directly to session
-            st.session_state.workout_session['current_parsed_exercise'] = exact_exercise
-            st.session_state.recording_mode = None
+                    in_progress = {
+                        "name": exercise_name,
+                        "sets": [set_data],
+                        "target_sets": target_sets,
+                        "target_reps": suggested_reps,
+                        "suggested_weight_lbs": suggested_weight,
+                        "rest_seconds": cached_suggestion.get('rest_seconds', 90)
+                    }
 
-            # Move to preview
-            st.session_state.log_state = 'session_exercise_preview'
-            st.rerun()
+                    # Update session state
+                    st.session_state.workout_session['in_progress_exercise'] = in_progress
+                    st.session_state.workout_session['current_exercise_name'] = exercise_name
+                    st.session_state.workout_session['target_sets'] = target_sets
+                    st.session_state.workout_session['current_set_number'] = 1
+                    st.session_state.workout_session['current_exercise_sets_completed'] = [set_data]
+                else:
+                    # Add set to existing in_progress_exercise
+                    in_progress['sets'].append(set_data)
+                    st.session_state.workout_session['in_progress_exercise'] = in_progress
+                    st.session_state.workout_session['current_set_number'] = set_number
+                    st.session_state.workout_session['current_exercise_sets_completed'].append(set_data)
+
+                # Clear recording mode
+                st.session_state.recording_mode = None
+                if 'set_suggestion_cache' in st.session_state:
+                    del st.session_state.set_suggestion_cache
+
+                # Move to set preview state
+                st.session_state.log_state = 'session_set_preview'
+                st.rerun()
 
         # Handle 'modified' and 'different' modes - need user input
         if st.session_state.recording_mode in ['modified', 'different']:
+            # Get cached suggestion for context
+            cached_suggestion = st.session_state.get('set_suggestion_cache', {})
+
             # Show appropriate prompt based on mode
-            if st.session_state.recording_mode == 'modified' and next_suggestion:
-                suggested_name = next_suggestion.get('exercise_name')
-                st.info(f"💡 Recording **{suggested_name}** - just say the sets, reps, and weights")
-                st.caption("Example: '135 for 10, 8, 7' or '3 sets of 10 at 135'")
+            if st.session_state.recording_mode == 'modified' and cached_suggestion:
+                suggested_name = cached_suggestion.get('exercise_name')
+                st.info(f"💡 Recording **{suggested_name}** - just say the weight and reps for THIS set")
+                st.caption("Example: '135 for 10' or '10 reps at 135'")
             else:
-                st.info("💡 Describe the full exercise with name, sets, reps, and weight")
-                st.caption("Example: 'Dumbbell press, 3 sets of 10 at 50 pounds'")
+                st.info("💡 Describe the exercise and this set")
+                st.caption("Example: 'Dumbbell press, 135 for 10'")
 
             # Record exercise input
             workout_input = combined_input()
@@ -383,13 +805,13 @@ def render_session_active_state():
                 try:
                     from src.agents.session_graph import add_exercise_to_session
 
-                    with st.spinner("Parsing exercise..."):
+                    with st.spinner("Parsing set..."):
                         # Build context for parser
                         parse_context = {}
-                        if st.session_state.recording_mode == 'modified' and next_suggestion:
-                            parse_context['suggested_exercise'] = next_suggestion.get('exercise_name')
+                        if st.session_state.recording_mode == 'modified' and cached_suggestion:
+                            parse_context['suggested_exercise'] = cached_suggestion.get('exercise_name')
 
-                        # Parse and add to session
+                        # Parse the input (might get multiple sets, we'll take first)
                         updated_session = add_exercise_to_session(
                             st.session_state.workout_session,
                             workout_input,
@@ -401,35 +823,178 @@ def render_session_active_state():
 
                     # Check if parsing succeeded
                     if updated_session.get('current_parsed_exercise'):
-                        # SUCCESS - Clear state and move to preview
+                        # SUCCESS - Check for multiple sets
+                        parsed_exercise = updated_session['current_parsed_exercise']
+                        exercise_name = parsed_exercise.get('name')
+                        all_sets = parsed_exercise.get('sets', [])
 
-                        # Store raw input for potential editing
-                        st.session_state.raw_exercise_input = workout_input
+                        if not all_sets:
+                            st.error("❌ No sets found in your recording")
+                            st.caption("Please try again above")
+                        elif len(all_sets) > 1:
+                            # MULTI-SET DETECTED - Show dialog
+                            st.divider()
 
-                        # Clear cached transcription
-                        if 'cached_transcription' in st.session_state:
-                            del st.session_state.cached_transcription
+                            # Store parsed data in session state for dialog handling
+                            if 'multi_set_pending' not in st.session_state:
+                                st.session_state.multi_set_pending = {
+                                    'exercise_name': exercise_name,
+                                    'all_sets': all_sets,
+                                    'cached_suggestion': cached_suggestion
+                                }
 
-                        # Reset recording mode for next exercise
-                        st.session_state.recording_mode = None
+                            # Show dialog and get user choice
+                            user_choice = render_multi_set_choice_dialog(all_sets)
 
-                        # Move to preview state
-                        st.session_state.log_state = 'session_exercise_preview'
-                        st.rerun()
+                            if user_choice == "first_only":
+                                # Take first set only
+                                first_set = all_sets[0]
+
+                                # Update or create in_progress_exercise
+                                in_progress = session.get('in_progress_exercise')
+                                if in_progress is None:
+                                    next_sug = session.get('next_suggestion') or {}
+                                    target_sets = next_sug.get('target_sets', 4)
+
+                                    in_progress = {
+                                        "name": exercise_name,
+                                        "sets": [first_set],
+                                        "target_sets": target_sets,
+                                        "target_reps": first_set.get('reps', 10),
+                                        "suggested_weight_lbs": first_set.get('weight_lbs'),
+                                        "rest_seconds": cached_suggestion.get('rest_seconds', 90) if cached_suggestion else 90
+                                    }
+
+                                    st.session_state.workout_session['in_progress_exercise'] = in_progress
+                                    st.session_state.workout_session['current_exercise_name'] = exercise_name
+                                    st.session_state.workout_session['target_sets'] = target_sets
+                                    st.session_state.workout_session['current_set_number'] = 1
+                                    st.session_state.workout_session['current_exercise_sets_completed'] = [first_set]
+                                else:
+                                    in_progress['sets'].append(first_set)
+                                    current_set_num = len(in_progress['sets'])
+                                    st.session_state.workout_session['in_progress_exercise'] = in_progress
+                                    st.session_state.workout_session['current_set_number'] = current_set_num
+                                    st.session_state.workout_session['current_exercise_sets_completed'].append(first_set)
+
+                                # Clear state
+                                if 'cached_transcription' in st.session_state:
+                                    del st.session_state.cached_transcription
+                                if 'set_suggestion_cache' in st.session_state:
+                                    del st.session_state.set_suggestion_cache
+                                if 'multi_set_pending' in st.session_state:
+                                    del st.session_state.multi_set_pending
+
+                                st.session_state.recording_mode = None
+                                st.session_state.log_state = 'session_set_preview'
+                                st.rerun()
+
+                            elif user_choice == "all_sets":
+                                # Record all sets and finish exercise
+                                in_progress = session.get('in_progress_exercise')
+                                if in_progress is None:
+                                    # Create new exercise with all sets
+                                    in_progress = {
+                                        "name": exercise_name,
+                                        "sets": all_sets,
+                                        "target_sets": len(all_sets),
+                                        "target_reps": all_sets[0].get('reps', 10),
+                                        "suggested_weight_lbs": all_sets[0].get('weight_lbs'),
+                                        "rest_seconds": cached_suggestion.get('rest_seconds', 90) if cached_suggestion else 90
+                                    }
+
+                                    st.session_state.workout_session['in_progress_exercise'] = in_progress
+                                    st.session_state.workout_session['current_exercise_name'] = exercise_name
+                                    st.session_state.workout_session['target_sets'] = len(all_sets)
+                                    st.session_state.workout_session['current_set_number'] = len(all_sets)
+                                    st.session_state.workout_session['current_exercise_sets_completed'] = all_sets
+                                else:
+                                    # Add all sets to existing exercise
+                                    in_progress['sets'].extend(all_sets)
+                                    st.session_state.workout_session['in_progress_exercise'] = in_progress
+                                    st.session_state.workout_session['current_set_number'] = len(in_progress['sets'])
+                                    st.session_state.workout_session['current_exercise_sets_completed'].extend(all_sets)
+                                    st.session_state.workout_session['target_sets'] = len(in_progress['sets'])
+
+                                # Clear state
+                                if 'cached_transcription' in st.session_state:
+                                    del st.session_state.cached_transcription
+                                if 'set_suggestion_cache' in st.session_state:
+                                    del st.session_state.set_suggestion_cache
+                                if 'multi_set_pending' in st.session_state:
+                                    del st.session_state.multi_set_pending
+
+                                st.session_state.recording_mode = None
+                                # Go straight to exercise complete
+                                st.session_state.log_state = 'session_exercise_complete'
+                                st.rerun()
+
+                            elif user_choice == "cancel":
+                                # Cancel and let them re-record
+                                if 'multi_set_pending' in st.session_state:
+                                    del st.session_state.multi_set_pending
+                                if 'cached_transcription' in st.session_state:
+                                    del st.session_state.cached_transcription
+                                st.toast("Recording cancelled - try again", icon="ℹ️")
+                                st.rerun()
+
+                        else:
+                            # Single set - normal flow
+                            first_set = all_sets[0]
+
+                            # Update or create in_progress_exercise
+                            in_progress = session.get('in_progress_exercise')
+                            if in_progress is None:
+                                # First set of new exercise
+                                next_sug = session.get('next_suggestion') or {}
+                                target_sets = next_sug.get('target_sets', 4)
+
+                                in_progress = {
+                                    "name": exercise_name,
+                                    "sets": [first_set],
+                                    "target_sets": target_sets,
+                                    "target_reps": first_set.get('reps', 10),
+                                    "suggested_weight_lbs": first_set.get('weight_lbs'),
+                                    "rest_seconds": cached_suggestion.get('rest_seconds', 90) if cached_suggestion else 90
+                                }
+
+                                st.session_state.workout_session['in_progress_exercise'] = in_progress
+                                st.session_state.workout_session['current_exercise_name'] = exercise_name
+                                st.session_state.workout_session['target_sets'] = target_sets
+                                st.session_state.workout_session['current_set_number'] = 1
+                                st.session_state.workout_session['current_exercise_sets_completed'] = [first_set]
+                            else:
+                                # Add to existing exercise
+                                in_progress['sets'].append(first_set)
+                                current_set_num = len(in_progress['sets'])
+                                st.session_state.workout_session['in_progress_exercise'] = in_progress
+                                st.session_state.workout_session['current_set_number'] = current_set_num
+                                st.session_state.workout_session['current_exercise_sets_completed'].append(first_set)
+
+                            # Clear state
+                            if 'cached_transcription' in st.session_state:
+                                del st.session_state.cached_transcription
+                            if 'set_suggestion_cache' in st.session_state:
+                                del st.session_state.set_suggestion_cache
+
+                            st.session_state.recording_mode = None
+
+                            # Move to set preview
+                            st.session_state.log_state = 'session_set_preview'
+                            st.rerun()
+
                     else:
-                        # PARSING FAILED - Keep recording mode active so they can retry
-                        error_msg = updated_session.get('response', 'Could not parse exercise')
+                        # PARSING FAILED
+                        error_msg = updated_session.get('response', 'Could not parse set')
                         st.error(f"❌ {error_msg}")
 
-                        # Show example if exercise name was missing
                         if "exercise name" in error_msg.lower():
-                            st.info("💡 **Example:** Say 'Bench press, 3 sets of 10 reps at 135 pounds'")
+                            st.info("💡 **Example:** Say 'Bench press, 135 for 10'")
 
-                        st.warning("👆 Try again above, or click 'Back to Options' below to choose a different mode")
+                        st.warning("👆 Try again above, or click 'Back to Options' below")
 
                 except Exception as e:
-                    # EXCEPTION - Keep recording mode active
-                    st.error(f"❌ Failed to parse exercise: {str(e)}")
+                    st.error(f"❌ Failed to parse set: {str(e)}")
                     st.caption("Please try again above or click 'Back to Options' below")
 
             # Add "Back to Options" button for retry/cancel
@@ -443,6 +1008,52 @@ def render_session_active_state():
                         del st.session_state.cached_transcription
                     st.rerun()
 
+    # Show skip exercise confirmation if flag is set
+    if st.session_state.get('confirm_skip_exercise_active'):
+        st.divider()
+
+        # Get current exercise name for the confirmation message
+        session = st.session_state.workout_session
+        set_suggestion = generate_next_set_suggestion(session)
+        exercise_name = set_suggestion.get('exercise_name', 'this exercise') if set_suggestion else 'this exercise'
+
+        st.warning(f"⚠️ **Skip {exercise_name}?**")
+        st.caption("This exercise will not be logged.")
+
+        skip_col1, skip_col2 = st.columns(2)
+        with skip_col1:
+            if st.button("Yes, Skip It", key="confirm_skip_active_yes", type="primary", use_container_width=True):
+                # Skip this exercise entirely and move to next
+                print(f"⏭️ SKIP EXERCISE: {exercise_name}")
+
+                # Clear any in-progress exercise state
+                st.session_state.workout_session['in_progress_exercise'] = None
+                st.session_state.workout_session['current_set_number'] = 0
+                st.session_state.workout_session['target_sets'] = 0
+                st.session_state.workout_session['current_set_suggestion'] = None
+                st.session_state.workout_session['next_suggestion'] = None  # Clear AI suggestion cache
+
+                # Increment exercise index to move to next exercise
+                current_index = session.get('current_exercise_index', 0)
+                st.session_state.workout_session['current_exercise_index'] = current_index + 1
+
+                # Clear recording mode and suggestion cache
+                st.session_state.recording_mode = None
+                if 'set_suggestion_cache' in st.session_state:
+                    del st.session_state.set_suggestion_cache
+
+                # Clear confirmation flag
+                st.session_state.confirm_skip_exercise_active = False
+
+                # Go to intro screen for next exercise
+                st.session_state.log_state = 'session_exercise_intro'
+                print(f"   Moving to exercise index {current_index + 1}")
+                st.rerun()
+        with skip_col2:
+            if st.button("No, Do This Exercise", key="confirm_skip_active_no", use_container_width=True):
+                st.session_state.confirm_skip_exercise_active = False
+                st.rerun()
+
     # Cancel session button
     st.divider()
     if st.button("❌ Cancel Session", key="cancel_session_btn"):
@@ -450,6 +1061,500 @@ def render_session_active_state():
         reset_workout_session()
         # Navigate to home instead of staying on this page
         st.switch_page("app.py")
+
+
+def render_session_set_preview():
+    """Show set preview with rest timer and options (set-by-set flow)."""
+    import time
+
+    st.title("✅ Set Recorded")
+
+    session = st.session_state.workout_session
+    if not session:
+        st.error("No session found")
+        return
+
+    # Get in_progress_exercise details
+    in_progress = session.get('in_progress_exercise')
+    if not in_progress:
+        st.error("No exercise in progress")
+        return
+
+    exercise_name = in_progress.get('name', 'Unknown')
+    all_sets = in_progress.get('sets', [])
+    current_set_number = session.get('current_set_number', 1)
+    target_sets = session.get('target_sets', 0)
+
+    if not all_sets:
+        st.error("No sets recorded yet")
+        return
+
+    # Get the set just recorded (last set in list)
+    last_set = all_sets[-1]
+    weight = last_set.get('weight_lbs')
+    reps = last_set.get('reps')
+
+    # Show set info
+    st.success(f"**{exercise_name}**")
+
+    if target_sets > 0:
+        st.subheader(f"Set {current_set_number} of {target_sets}")
+    else:
+        st.subheader(f"Set {current_set_number}")
+
+    # Show set details
+    if weight:
+        st.info(f"**{reps} reps @ {weight:.0f} lbs**")
+    else:
+        st.info(f"**{reps} reps** (bodyweight)")
+
+    st.divider()
+
+    # Edit this set (expandable)
+    if 'editing_set' not in st.session_state:
+        st.session_state.editing_set = False
+
+    with st.expander("✏️ Edit This Set (optional)", expanded=st.session_state.editing_set):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            edited_weight = st.number_input(
+                "Weight (lbs):",
+                value=float(weight) if weight else 0.0,
+                step=2.5,
+                key="edit_set_weight"
+            )
+
+        with col2:
+            edited_reps = st.number_input(
+                "Reps:",
+                value=int(reps),
+                min_value=1,
+                max_value=100,
+                key="edit_set_reps"
+            )
+
+        if st.button("💾 Save Changes", key="save_set_edit", type="primary"):
+            # Update the last set in in_progress_exercise
+            updated_set = {"reps": edited_reps}
+            if edited_weight > 0:
+                updated_set["weight_lbs"] = edited_weight
+
+            in_progress['sets'][-1] = updated_set
+            st.session_state.workout_session['in_progress_exercise'] = in_progress
+            st.session_state.editing_set = False
+            st.toast("✅ Set updated!", icon="✅")
+            st.rerun()
+
+    st.divider()
+
+    # Check if this is the last set
+    is_last_set = current_set_number >= target_sets
+
+    # Rest timer (unless last set)
+    if is_last_set:
+        # Last set - show completion message
+        st.success("🎉 All planned sets complete!")
+        st.caption(f"You completed {current_set_number} of {target_sets} sets")
+
+        st.divider()
+
+        # Action buttons for last set
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("✅ Finish Exercise", key="complete_exercise_btn", use_container_width=True, type="primary"):
+                # Move to exercise complete state
+                st.session_state.log_state = 'session_exercise_complete'
+                st.rerun()
+
+        with col2:
+            if st.button("➕ Add Bonus Set", key="add_bonus_set_btn", use_container_width=True):
+                # Increment target sets and go back to active state
+                st.session_state.workout_session['target_sets'] = target_sets + 1
+                st.session_state.log_state = 'session_active'
+                st.rerun()
+
+    else:
+        # Not last set - show rest timer
+        rest_seconds = in_progress.get('rest_seconds', 90)
+
+        st.markdown(f"### ⏸️ Rest Before Set {current_set_number + 1}")
+
+        # Initialize rest timer
+        if 'rest_start_time' not in st.session_state:
+            st.session_state.rest_start_time = time.time()
+            st.session_state.rest_duration = rest_seconds
+
+        # Calculate remaining time
+        elapsed = time.time() - st.session_state.rest_start_time
+        remaining = max(0, st.session_state.rest_duration - elapsed)
+
+        # Show countdown
+        mins = int(remaining // 60)
+        secs = int(remaining % 60)
+        st.markdown(f"## ⏱️ {mins}:{secs:02d}")
+
+        # Progress bar
+        progress = 1.0 - (remaining / st.session_state.rest_duration) if st.session_state.rest_duration > 0 else 1.0
+        st.progress(progress)
+
+        # Quick adjust buttons
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            if st.button("30s", key="rest_30s"):
+                st.session_state.rest_duration = 30
+                st.session_state.rest_start_time = time.time()
+                st.rerun()
+
+        with col2:
+            if st.button("60s", key="rest_60s"):
+                st.session_state.rest_duration = 60
+                st.session_state.rest_start_time = time.time()
+                st.rerun()
+
+        with col3:
+            if st.button("90s", key="rest_90s"):
+                st.session_state.rest_duration = 90
+                st.session_state.rest_start_time = time.time()
+                st.rerun()
+
+        with col4:
+            if st.button("Next Set", key="skip_rest_btn", type="primary"):
+                # Clear timer and go to next set
+                if 'rest_start_time' in st.session_state:
+                    del st.session_state.rest_start_time
+                if 'rest_duration' in st.session_state:
+                    del st.session_state.rest_duration
+                st.session_state.log_state = 'session_active'
+                st.rerun()
+
+        # Auto-advance when timer expires
+        if remaining <= 0:
+            # Clear timer
+            if 'rest_start_time' in st.session_state:
+                del st.session_state.rest_start_time
+            if 'rest_duration' in st.session_state:
+                del st.session_state.rest_duration
+            # Move to next set
+            st.session_state.log_state = 'session_active'
+            st.rerun()
+
+        st.divider()
+
+        # Early finish confirmation dialog
+        if st.session_state.get('confirm_early_finish_preview'):
+            # Use shared confirmation helper
+            render_early_finish_confirmation(
+                planned_sets=target_sets,
+                completed_sets=current_set_number,
+                confirm_yes_key="confirm_preview_yes",
+                confirm_no_key="confirm_preview_no"
+            )
+
+        else:
+            # Action buttons during rest (only show when not confirming)
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("✅ Finish Exercise Early", key="finish_exercise_early_btn", use_container_width=True):
+                    st.session_state.confirm_early_finish_preview = True
+                    st.rerun()
+
+            with col2:
+                if st.button("🔄 Redo This Set", key="redo_set_btn", use_container_width=True):
+                    # Remove last set and go back to recording
+                    in_progress['sets'].pop()
+                    st.session_state.workout_session['in_progress_exercise'] = in_progress
+                    st.session_state.workout_session['current_set_number'] = max(1, current_set_number - 1)
+
+                    # Clear timer
+                    if 'rest_start_time' in st.session_state:
+                        del st.session_state.rest_start_time
+                    if 'rest_duration' in st.session_state:
+                        del st.session_state.rest_duration
+
+                    # Go back to active state
+                    st.session_state.log_state = 'session_active'
+                    st.rerun()
+
+
+def render_session_exercise_complete():
+    """Show exercise summary and rest timer before next exercise (set-by-set flow)."""
+    import time
+
+    # DEBUG
+    print(f"🟢 RENDER EXERCISE COMPLETE CALLED")
+    session = st.session_state.workout_session
+    if session:
+        print(f"   In progress: {session.get('in_progress_exercise', {}).get('name')}")
+        print(f"   Sets completed: {len(session.get('in_progress_exercise', {}).get('sets', []))}")
+        print(f"   Current index: {session.get('current_exercise_index')}")
+
+    st.title("🎉 Exercise Complete!")
+
+    if not session:
+        st.error("No session found")
+        print(f"   ❌ ERROR: No session found")
+        return
+
+    # Get in_progress_exercise details
+    in_progress = session.get('in_progress_exercise')
+    if not in_progress:
+        st.error("No exercise in progress")
+        print(f"   ❌ ERROR: No in_progress_exercise")
+        return
+
+    exercise_name = in_progress.get('name', 'Unknown')
+    all_sets = in_progress.get('sets', [])
+
+    # Show exercise summary
+    st.success(f"**{exercise_name}** - {len(all_sets)} sets")
+
+    # List all sets
+    for i, set_data in enumerate(all_sets, 1):
+        weight = set_data.get('weight_lbs')
+        reps = set_data.get('reps')
+
+        if weight:
+            st.caption(f"Set {i}: {reps} reps @ {weight:.0f} lbs")
+        else:
+            st.caption(f"Set {i}: {reps} reps (bodyweight)")
+
+    # Calculate total volume
+    total_volume = sum(
+        s.get('weight_lbs', 0) * s.get('reps', 0)
+        for s in all_sets
+    )
+
+    if total_volume > 0:
+        st.info(f"**Total Volume:** {total_volume:,.0f} lbs")
+
+    st.divider()
+
+    # Check if there's a next exercise
+    planned_template = session.get('planned_template', {})
+    current_index = session.get('current_exercise_index', 0)
+    plan_exercises = planned_template.get('exercises', [])
+
+    # After accumulating, index will be current_index + 1
+    next_index = current_index + 1
+    is_last_exercise = next_index >= len(plan_exercises)
+
+    if is_last_exercise:
+        # No more exercises - offer to continue or finish
+        st.success("🎉 You've completed all planned exercises!")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("✅ Finish Workout", key="finish_workout_btn", use_container_width=True, type="primary"):
+                # Accumulate current exercise
+                from src.agents.session_graph import accumulate_exercise
+
+                # Build complete exercise from in_progress
+                complete_exercise = {
+                    "name": exercise_name,
+                    "sets": all_sets
+                }
+
+                # Add to accumulated exercises
+                accumulated = session.get('accumulated_exercises', []).copy()
+                accumulated.append(complete_exercise)
+
+                st.session_state.workout_session['accumulated_exercises'] = accumulated
+                st.session_state.workout_session['in_progress_exercise'] = None
+                st.session_state.workout_session['current_exercise_name'] = None
+                st.session_state.workout_session['current_set_number'] = 0
+                st.session_state.workout_session['target_sets'] = 0
+                st.session_state.workout_session['current_exercise_sets_completed'] = []
+
+                # Increment exercise index
+                st.session_state.workout_session['current_exercise_index'] = next_index
+
+                # Move to workout review
+                st.session_state.log_state = 'session_workout_review'
+                st.rerun()
+
+        with col2:
+            if st.button("💪 Add More Exercises", key="continue_workout_btn", use_container_width=True):
+                # Accumulate current exercise and continue
+                complete_exercise = {
+                    "name": exercise_name,
+                    "sets": all_sets
+                }
+
+                accumulated = session.get('accumulated_exercises', []).copy()
+                accumulated.append(complete_exercise)
+
+                st.session_state.workout_session['accumulated_exercises'] = accumulated
+                st.session_state.workout_session['in_progress_exercise'] = None
+                st.session_state.workout_session['current_exercise_name'] = None
+                st.session_state.workout_session['current_set_number'] = 0
+                st.session_state.workout_session['target_sets'] = 0
+                st.session_state.workout_session['current_exercise_sets_completed'] = []
+                st.session_state.workout_session['current_exercise_index'] = next_index
+
+                # Set flag to continue
+                st.session_state.continue_after_plan = True
+
+                # Move to intro screen for next exercise
+                st.session_state.log_state = 'session_exercise_intro'
+                st.rerun()
+
+    else:
+        # There's a next exercise - show rest timer
+        next_exercise = plan_exercises[next_index]
+        next_exercise_name = next_exercise.get('name', 'Next exercise')
+        rest_seconds = next_exercise.get('rest_seconds', 120)  # Longer rest between exercises
+
+        st.markdown(f"### ⏸️ Rest Before {next_exercise_name}")
+
+        # Initialize rest timer
+        if 'exercise_rest_start_time' not in st.session_state:
+            st.session_state.exercise_rest_start_time = time.time()
+            st.session_state.exercise_rest_duration = rest_seconds
+
+        # Calculate remaining time
+        elapsed = time.time() - st.session_state.exercise_rest_start_time
+        remaining = max(0, st.session_state.exercise_rest_duration - elapsed)
+
+        # Show countdown
+        mins = int(remaining // 60)
+        secs = int(remaining % 60)
+        st.markdown(f"## ⏱️ {mins}:{secs:02d}")
+
+        # Progress bar
+        progress = 1.0 - (remaining / st.session_state.exercise_rest_duration) if st.session_state.exercise_rest_duration > 0 else 1.0
+        st.progress(progress)
+
+        # Quick adjust buttons
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            if st.button("30s", key="ex_rest_30s"):
+                st.session_state.exercise_rest_duration = 30
+                st.session_state.exercise_rest_start_time = time.time()
+                st.rerun()
+
+        with col2:
+            if st.button("60s", key="ex_rest_60s"):
+                st.session_state.exercise_rest_duration = 60
+                st.session_state.exercise_rest_start_time = time.time()
+                st.rerun()
+
+        with col3:
+            if st.button("90s", key="ex_rest_90s"):
+                st.session_state.exercise_rest_duration = 90
+                st.session_state.exercise_rest_start_time = time.time()
+                st.rerun()
+
+        with col4:
+            if st.button("Continue", key="skip_ex_rest_btn", type="primary"):
+                # Accumulate and move to next exercise
+                complete_exercise = {
+                    "name": exercise_name,
+                    "sets": all_sets
+                }
+
+                accumulated = session.get('accumulated_exercises', []).copy()
+                accumulated.append(complete_exercise)
+
+                st.session_state.workout_session['accumulated_exercises'] = accumulated
+                st.session_state.workout_session['in_progress_exercise'] = None
+                st.session_state.workout_session['current_exercise_name'] = None
+                st.session_state.workout_session['current_set_number'] = 0
+                st.session_state.workout_session['target_sets'] = 0
+                st.session_state.workout_session['current_exercise_sets_completed'] = []
+                st.session_state.workout_session['current_exercise_index'] = next_index
+
+                # Clear timer
+                if 'exercise_rest_start_time' in st.session_state:
+                    del st.session_state.exercise_rest_start_time
+                if 'exercise_rest_duration' in st.session_state:
+                    del st.session_state.exercise_rest_duration
+
+                # Refresh next suggestion for the new exercise
+                from src.agents.session_graph import refresh_next_suggestion
+                st.session_state.workout_session = refresh_next_suggestion(st.session_state.workout_session)
+
+                # Move to intro screen for next exercise
+                st.session_state.log_state = 'session_exercise_intro'
+                st.rerun()
+
+        # Auto-advance when timer expires
+        if remaining <= 0:
+            # Accumulate and move to next exercise automatically
+            complete_exercise = {
+                "name": exercise_name,
+                "sets": all_sets
+            }
+
+            accumulated = session.get('accumulated_exercises', []).copy()
+            accumulated.append(complete_exercise)
+
+            st.session_state.workout_session['accumulated_exercises'] = accumulated
+            st.session_state.workout_session['in_progress_exercise'] = None
+            st.session_state.workout_session['current_exercise_name'] = None
+            st.session_state.workout_session['current_set_number'] = 0
+            st.session_state.workout_session['target_sets'] = 0
+            st.session_state.workout_session['current_exercise_sets_completed'] = []
+            st.session_state.workout_session['current_exercise_index'] = next_index
+
+            # Clear timer
+            if 'exercise_rest_start_time' in st.session_state:
+                del st.session_state.exercise_rest_start_time
+            if 'exercise_rest_duration' in st.session_state:
+                del st.session_state.exercise_rest_duration
+
+            # Refresh next suggestion
+            from src.agents.session_graph import refresh_next_suggestion
+            st.session_state.workout_session = refresh_next_suggestion(st.session_state.workout_session)
+
+            # Move to intro screen for next exercise
+            st.session_state.log_state = 'session_exercise_intro'
+            st.rerun()
+
+        st.divider()
+
+        # Additional actions
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("➕ Add Another Set", key="add_another_set_btn", use_container_width=True):
+                # Increment target sets and go back to active state
+                target_sets = session.get('target_sets', 0)
+                st.session_state.workout_session['target_sets'] = target_sets + 1
+
+                # Clear timer
+                if 'exercise_rest_start_time' in st.session_state:
+                    del st.session_state.exercise_rest_start_time
+                if 'exercise_rest_duration' in st.session_state:
+                    del st.session_state.exercise_rest_duration
+
+                # Go back to active state for bonus set
+                st.session_state.log_state = 'session_active'
+                st.rerun()
+
+        with col2:
+            if st.button("🔄 Redo Exercise", key="redo_exercise_btn", use_container_width=True):
+                # Clear in_progress_exercise and start over
+                st.session_state.workout_session['in_progress_exercise'] = None
+                st.session_state.workout_session['current_exercise_name'] = None
+                st.session_state.workout_session['current_set_number'] = 0
+                st.session_state.workout_session['target_sets'] = 0
+                st.session_state.workout_session['current_exercise_sets_completed'] = []
+
+                # Clear timer
+                if 'exercise_rest_start_time' in st.session_state:
+                    del st.session_state.exercise_rest_start_time
+                if 'exercise_rest_duration' in st.session_state:
+                    del st.session_state.exercise_rest_duration
+
+                # Go back to active state
+                st.session_state.log_state = 'session_active'
+                st.rerun()
 
 
 def _render_deviation_warning(deviation: dict, session: dict):
@@ -494,8 +1599,10 @@ def _render_deviation_warning(deviation: dict, session: dict):
 
 
 def render_session_exercise_preview():
-    """Show exercise preview with action buttons."""
+    """Show exercise preview with rest timer and editing."""
+    import time
     from src.ui.session_components import render_exercise_preview
+    from src.agents.session_graph import accumulate_exercise, refresh_next_suggestion
 
     st.title("✅ Exercise Added")
 
@@ -504,114 +1611,251 @@ def render_session_exercise_preview():
     if session and session.get('current_parsed_exercise'):
         render_exercise_preview(session['current_parsed_exercise'])
 
-    # Phase 3: Show deviation warning if detected
+    # Show deviation warning if detected
     deviation = session.get('current_deviation') if session else None
     if deviation and deviation.get('is_deviation'):
         _render_deviation_warning(deviation, session)
 
     st.divider()
+    st.container()  # Force break from column context
 
-    # Action buttons - CRITICAL: Use container break and direct column attachment
-    st.container()  # Force break from any previous column context
+    # Check if this is the last exercise in the plan
+    planned_template = session.get('planned_template', {})
+    current_index = session.get('current_exercise_index', 0)
+    plan_exercises = planned_template.get('exercises', [])
 
-    # Ask user to confirm before adding
-    st.markdown("**Does this look correct?**")
+    # After accumulating this exercise, index will be current_index + 1
+    # So the NEXT exercise will be at current_index + 1
+    next_index = current_index + 1
+    is_last_exercise = next_index >= len(plan_exercises)
 
-    btn_col1, btn_col2, btn_col3 = st.columns(3)
+    # Initialize rest timer (unless it's the last exercise)
+    if not is_last_exercise:
+        # Figure out what the ACTUAL next exercise will be (not the stale suggestion)
+        next_planned_exercise = plan_exercises[next_index]
+        next_exercise_name = next_planned_exercise.get('name', 'Next exercise')
+        next_rest_duration = next_planned_exercise.get('rest_seconds', 90)
 
-    # Confirm and Record Next button
-    record_next_clicked = btn_col1.button(
-        "✅ Yes, Record Next",
-        type="primary",
-        key="record_next_btn",
-        use_container_width=True
-    )
+        if 'rest_start_time' not in st.session_state:
+            st.session_state.rest_start_time = time.time()
+            st.session_state.rest_duration = next_rest_duration
 
-    # Finish Workout button
-    finish_clicked = btn_col2.button(
-        "✅ Yes, Finish",
-        key="finish_workout_btn",
-        use_container_width=True
-    )
+        # Show what's next
+        st.markdown(f"### ⏸️ Rest Before {next_exercise_name}")
 
-    # Redo Recording button
-    redo_clicked = btn_col3.button(
-        "❌ No, Redo",
-        key="redo_recording_btn",
-        use_container_width=True
-    )
+        # Show the exercise being added (for review/editing)
+        st.caption("Review your exercise while resting:")
 
-    # Handle button clicks
-    if record_next_clicked:
-        from src.agents.session_graph import accumulate_exercise, refresh_next_suggestion
+        # Initialize edit mode if needed
+        if 'editing_exercise' not in st.session_state:
+            st.session_state.editing_exercise = False
 
-        # Accumulate current exercise
-        session['user_action'] = 'add_another'
-        updated_session = accumulate_exercise(session)
+        # Show exercise in expandable edit section
+        with st.expander("📝 Edit Exercise (optional)", expanded=st.session_state.editing_exercise):
+            current_ex = session.get('current_parsed_exercise', {})
 
-        # CRITICAL FIX: Clear user_action so next parse doesn't auto-accumulate
-        updated_session['user_action'] = None
-        updated_session['response'] = None  # Also clear response to avoid confusion
+            # Convert exercise back to text format for editing
+            sets = current_ex.get('sets', [])
+            exercise_name = current_ex.get('name', '')
 
-        # Phase 2: Refresh next suggestion after accumulating
-        updated_session = refresh_next_suggestion(updated_session)
+            # Format sets as "weight x reps" strings
+            sets_text = []
+            for s in sets:
+                weight = s.get('weight_lbs')
+                reps = s.get('reps')
+                if weight:
+                    sets_text.append(f"{weight}x{reps}")
+                else:
+                    sets_text.append(f"{reps} reps")
 
-        st.session_state.workout_session = updated_session
+            formatted_input = f"{exercise_name}: {', '.join(sets_text)}"
 
-        # Clear cached transcription
-        if 'cached_transcription' in st.session_state:
-            del st.session_state.cached_transcription
+            # Editable text area
+            edited_text = st.text_area(
+                "Edit exercise:",
+                value=formatted_input,
+                help="Format: Exercise Name: weight x reps, weight x reps\nExample: Bench Press: 135x10, 135x8, 135x6",
+                key="edit_exercise_text"
+            )
 
-        # Reset audio recorder for next exercise
-        if 'audio_recorder_key' not in st.session_state:
-            st.session_state.audio_recorder_key = 0
-        st.session_state.audio_recorder_key += 1
+            # Save edits button
+            if st.button("💾 Save Edits", key="save_edits", type="primary"):
+                # Re-parse the edited text
+                from src.agents.session_graph import parse_exercise_input
 
-        # Reset recording mode so user sees button options again
-        st.session_state.recording_mode = None
+                try:
+                    # Parse the edited text
+                    updated_session = parse_exercise_input({
+                        **session,
+                        'user_message': edited_text
+                    })
 
-        # Go back to active state
-        st.session_state.log_state = 'session_active'
-        st.rerun()
+                    # Update the current parsed exercise
+                    st.session_state.workout_session = updated_session
+                    st.toast("✅ Exercise updated!", icon="✅")
+                    st.session_state.editing_exercise = False
+                    st.rerun()
 
-    if finish_clicked:
-        from src.agents.session_graph import accumulate_exercise
+                except Exception as e:
+                    st.error(f"Failed to parse edits: {e}")
 
-        # Accumulate current exercise first
-        session['user_action'] = 'add_another'
-        updated_session = accumulate_exercise(session)
+        st.divider()
 
-        # Clear user_action before transitioning
-        updated_session['user_action'] = None
+        # Rest timer
+        elapsed = time.time() - st.session_state.rest_start_time
+        remaining = max(0, st.session_state.rest_duration - elapsed)
 
-        st.session_state.workout_session = updated_session
+        # Show rest timer
+        minutes = int(remaining // 60)
+        seconds = int(remaining % 60)
+        st.markdown(f"## ⏱️ {minutes}:{seconds:02d}")
 
-        # Move to review state
-        st.session_state.log_state = 'session_workout_review'
-        st.rerun()
+        progress = 1.0 - (remaining / st.session_state.rest_duration)
+        st.progress(progress)
 
-    if redo_clicked:
-        # User doesn't like the parsed result - let them redo
+        st.divider()
+        st.markdown("**Adjust rest time:**")
 
-        # Clear the current parsed exercise (don't add it)
-        session['current_parsed_exercise'] = None
-        st.session_state.workout_session = session
+        col1, col2, col3, col4 = st.columns(4)
+        if col1.button("30s", key="rest_30", use_container_width=True):
+            st.session_state.rest_duration = 30
+            st.session_state.rest_start_time = time.time()
+            st.rerun()
+        if col2.button("60s", key="rest_60", use_container_width=True):
+            st.session_state.rest_duration = 60
+            st.session_state.rest_start_time = time.time()
+            st.rerun()
+        if col3.button("90s", key="rest_90", type="primary", use_container_width=True):
+            st.session_state.rest_duration = 90
+            st.session_state.rest_start_time = time.time()
+            st.rerun()
+        if col4.button("Next Exercise", key="skip", type="primary", use_container_width=True):
+            # Skip rest and move to next exercise
+            _complete_exercise_and_continue(session)
+            return
 
-        # Clear cached transcription
-        if 'cached_transcription' in st.session_state:
-            del st.session_state.cached_transcription
+        # Auto-rerun to update timer countdown
+        if remaining > 0:
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            # Rest complete - auto-advance to next exercise
+            _complete_exercise_and_continue(session)
+            return
 
-        # Reset audio recorder
-        if 'audio_recorder_key' not in st.session_state:
-            st.session_state.audio_recorder_key = 0
-        st.session_state.audio_recorder_key += 1
+    # Main action buttons (always visible, below timer if present)
+    st.divider()
 
-        # Reset recording mode so they see button options again
-        st.session_state.recording_mode = None
+    # Show different message based on whether this is last exercise
+    if is_last_exercise:
+        st.success("🎉 **This is your last planned exercise!**")
+        st.caption("You can finish your workout or add bonus exercises.")
+        st.markdown("**Choose an action:**")
 
-        # Go back to active state to record again
-        st.session_state.log_state = 'session_active'
-        st.rerun()
+        col1, col2 = st.columns(2)
+        finish = col1.button("✅ Finish Workout", key="finish", type="primary", use_container_width=True)
+        add_more = col2.button("💪 Add More Exercises", key="add_more", use_container_width=True)
+
+        # Redo button below
+        if st.button("❌ Redo This Exercise", key="redo", use_container_width=True):
+            # Clear and redo
+            session['current_parsed_exercise'] = None
+            st.session_state.workout_session = session
+            if 'cached_transcription' in st.session_state:
+                del st.session_state.cached_transcription
+            if 'audio_recorder_key' not in st.session_state:
+                st.session_state.audio_recorder_key = 0
+            st.session_state.audio_recorder_key += 1
+            st.session_state.recording_mode = None
+            st.session_state.log_state = 'session_active'
+            st.rerun()
+
+        if add_more:
+            # Accumulate current exercise and continue adding
+            session['user_action'] = 'add_another'
+            updated_session = accumulate_exercise(session)
+            updated_session['user_action'] = None
+            updated_session['response'] = None
+            updated_session = refresh_next_suggestion(updated_session)
+            st.session_state.workout_session = updated_session
+            st.session_state.continue_after_plan = True  # Flag to allow bonus exercises
+
+            # Clear recorder
+            if 'cached_transcription' in st.session_state:
+                del st.session_state.cached_transcription
+            if 'audio_recorder_key' not in st.session_state:
+                st.session_state.audio_recorder_key = 0
+            st.session_state.audio_recorder_key += 1
+            st.session_state.recording_mode = None
+
+            st.session_state.log_state = 'session_active'
+            st.rerun()
+    else:
+        # Not last exercise - show standard action buttons
+        st.markdown("**Actions:**")
+
+        col1, col2 = st.columns(2)
+        finish = col1.button("✅ Finish Workout", key="finish", use_container_width=True)
+        redo = col2.button("❌ Redo Exercise", key="redo", use_container_width=True)
+
+        if finish:
+            # Accumulate current exercise and finish
+            session['user_action'] = 'add_another'
+            updated_session = accumulate_exercise(session)
+            updated_session['user_action'] = None
+            st.session_state.workout_session = updated_session
+            st.session_state.log_state = 'session_workout_review'
+            # Clean up rest timer state
+            if 'rest_start_time' in st.session_state:
+                del st.session_state.rest_start_time
+            st.rerun()
+
+        if redo:
+            # Clear and redo
+            session['current_parsed_exercise'] = None
+            st.session_state.workout_session = session
+            if 'cached_transcription' in st.session_state:
+                del st.session_state.cached_transcription
+            if 'audio_recorder_key' not in st.session_state:
+                st.session_state.audio_recorder_key = 0
+            st.session_state.audio_recorder_key += 1
+            st.session_state.recording_mode = None
+            st.session_state.log_state = 'session_active'
+            # Clean up rest timer state
+            if 'rest_start_time' in st.session_state:
+                del st.session_state.rest_start_time
+            st.rerun()
+
+
+def _complete_exercise_and_continue(session):
+    """Helper to accumulate exercise and move to next."""
+    from src.agents.session_graph import accumulate_exercise, refresh_next_suggestion
+
+    # Accumulate exercise
+    session['user_action'] = 'add_another'
+    updated_session = accumulate_exercise(session)
+    updated_session['user_action'] = None
+    updated_session['response'] = None
+    updated_session = refresh_next_suggestion(updated_session)
+
+    st.session_state.workout_session = updated_session
+
+    # Clear transcription and reset recorder
+    if 'cached_transcription' in st.session_state:
+        del st.session_state.cached_transcription
+    if 'audio_recorder_key' not in st.session_state:
+        st.session_state.audio_recorder_key = 0
+    st.session_state.audio_recorder_key += 1
+
+    # Reset states
+    st.session_state.recording_mode = None
+    st.session_state.editing_exercise = False
+    if 'rest_start_time' in st.session_state:
+        del st.session_state.rest_start_time
+
+    # Move to next exercise
+    st.session_state.log_state = 'session_active'
+    st.rerun()
 
 
 def render_session_workout_review():
@@ -704,13 +1948,26 @@ elif st.session_state.log_state == 'saved':
             reset_log_workflow()
             st.switch_page("app.py")
 
+elif st.session_state.log_state == 'session_exercise_intro':
+    print(f"🔴 STATE ROUTER: session_exercise_intro")
+    render_session_exercise_intro()
 elif st.session_state.log_state == 'session_active':
+    print(f"🔴 STATE ROUTER: session_active")
     render_session_active_state()
+elif st.session_state.log_state == 'session_set_preview':
+    print(f"🔴 STATE ROUTER: session_set_preview")
+    render_session_set_preview()
+elif st.session_state.log_state == 'session_exercise_complete':
+    print(f"🔴 STATE ROUTER: session_exercise_complete")
+    render_session_exercise_complete()
 elif st.session_state.log_state == 'session_exercise_preview':
+    print(f"🔴 STATE ROUTER: session_exercise_preview")
     render_session_exercise_preview()
 elif st.session_state.log_state == 'session_workout_review':
+    print(f"🔴 STATE ROUTER: session_workout_review")
     render_session_workout_review()
 else:
+    print(f"🔴 STATE ROUTER: Unknown state '{st.session_state.log_state}' - resetting to planning_chat")
     # Fallback - reset to planning chat
     st.session_state.log_state = 'planning_chat'
     st.rerun()

@@ -287,15 +287,158 @@ def _requires_unavailable_equipment(exercise_name: str, equipment_unavailable: l
     return False
 
 
+# ==================== BEGINNER WEIGHT LOOKUP ====================
+
+def _load_exercise_catalog() -> dict:
+    """
+    Load exercise catalog with beginner weight suggestions.
+
+    Returns:
+        Exercise catalog dict with exercises and default_weights
+    """
+    import json
+    import os
+
+    catalog_path = os.path.join(
+        os.path.dirname(__file__),
+        '../../data/exercise_catalog.json'
+    )
+
+    try:
+        with open(catalog_path, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {"exercises": [], "default_weights": {}}
+
+
+def _fuzzy_match_exercise(exercise_name: str, catalog: dict) -> dict | None:
+    """
+    Find exercise in catalog using fuzzy matching.
+
+    Args:
+        exercise_name: Exercise to match
+        catalog: Exercise catalog dict
+
+    Returns:
+        Matched exercise dict or None
+    """
+    exercise_lower = exercise_name.lower().strip()
+
+    for ex in catalog.get('exercises', []):
+        # Check canonical name
+        if ex['canonical'].lower() == exercise_lower:
+            return ex
+
+        # Check variations
+        for variation in ex.get('variations', []):
+            if variation.lower() == exercise_lower:
+                return ex
+
+        # Fuzzy matching: check if exercise contains key terms
+        canonical_lower = ex['canonical'].lower()
+        if canonical_lower in exercise_lower or exercise_lower in canonical_lower:
+            return ex
+
+    return None
+
+
+def _classify_exercise_for_default(exercise_name: str) -> str:
+    """
+    Classify unknown exercise to determine default weight category.
+
+    Args:
+        exercise_name: Exercise name
+
+    Returns:
+        Category key for default_weights lookup
+    """
+    name_lower = exercise_name.lower()
+
+    # Bodyweight exercises
+    bodyweight_keywords = ['pull up', 'chin up', 'dip', 'push up', 'plank']
+    if any(kw in name_lower for kw in bodyweight_keywords):
+        return 'bodyweight'
+
+    # Lower body compound
+    lower_compound = ['squat', 'deadlift', 'lunge', 'leg press']
+    if any(kw in name_lower for kw in lower_compound):
+        return 'compound_lower'
+
+    # Lower body isolation
+    lower_isolation = ['leg curl', 'leg extension', 'calf', 'hamstring curl']
+    if any(kw in name_lower for kw in lower_isolation):
+        return 'isolation_lower'
+
+    # Cable exercises
+    if 'cable' in name_lower:
+        return 'cable_machine'
+
+    # Upper body compound
+    upper_compound = ['bench', 'press', 'row', 'pulldown', 'pull down']
+    if any(kw in name_lower for kw in upper_compound):
+        return 'compound_upper'
+
+    # Default to upper isolation (conservative)
+    return 'isolation_upper'
+
+
+def _get_beginner_weight(exercise_name: str) -> tuple[float | None, str]:
+    """
+    Get beginner-friendly starting weight for an exercise.
+
+    Args:
+        exercise_name: Name of exercise
+
+    Returns:
+        Tuple of (weight_lbs, reasoning)
+    """
+    catalog = _load_exercise_catalog()
+
+    # Try exact/fuzzy match in catalog
+    matched_exercise = _fuzzy_match_exercise(exercise_name, catalog)
+
+    if matched_exercise:
+        beginner_info = matched_exercise.get('beginner_weight', {})
+        weight = beginner_info.get('lbs')
+        reasoning = beginner_info.get('reasoning', 'Start light, focus on form')
+        return (weight, reasoning)
+
+    # Fallback: Use classification-based defaults
+    category = _classify_exercise_for_default(exercise_name)
+    default_weights = catalog.get('default_weights', {})
+    default_weight = default_weights.get(category)
+
+    if default_weight is None:  # Bodyweight
+        return (None, "Bodyweight exercise - use assistance if needed")
+
+    # Build reasoning based on category
+    reasoning_map = {
+        'compound_upper': 'Start with controlled weight, 8-10 reps',
+        'compound_lower': 'Focus on depth and form over weight',
+        'isolation_upper': 'Light weight for strict form and control',
+        'isolation_lower': 'Moderate weight with full range of motion',
+        'cable_machine': 'Start light to learn the movement'
+    }
+
+    reasoning = reasoning_map.get(category, 'Start conservatively')
+
+    return (default_weight, reasoning)
+
+
+# ==================== PROGRESSIVE WEIGHT WITH BEGINNER FALLBACK ====================
+
 def _get_progressive_weight(exercise_name: str) -> float | None:
     """
     Get suggested weight with progressive overload.
+
+    For experienced users: Uses history + progressive overload
+    For new users: Returns beginner-friendly starting weight
 
     Args:
         exercise_name: Name of the exercise
 
     Returns:
-        Suggested weight in lbs, or None if no history
+        Suggested weight in lbs, or None if bodyweight exercise
     """
     try:
         # Get recent history for this exercise (last 90 days)
@@ -304,13 +447,17 @@ def _get_progressive_weight(exercise_name: str) -> float | None:
             "days": 90
         })
 
+        # NEW: If no history, get beginner weight
         if not history or not isinstance(history, list) or len(history) == 0:
-            return None
+            weight, reasoning = _get_beginner_weight(exercise_name)
+            return weight
 
         # Get most recent workout
         latest = history[0]
         if not latest or 'sets' not in latest:
-            return None
+            # Fallback to beginner weight
+            weight, _ = _get_beginner_weight(exercise_name)
+            return weight
 
         # Find max weight used in latest workout
         max_weight = 0
@@ -319,8 +466,10 @@ def _get_progressive_weight(exercise_name: str) -> float | None:
             if weight and weight > max_weight:
                 max_weight = weight
 
+        # NEW: User logged exercise but with no weight - get beginner weight
         if max_weight == 0:
-            return None
+            weight, _ = _get_beginner_weight(exercise_name)
+            return weight
 
         # Progressive overload: +2.5 lbs for upper body, +5 lbs for lower body
         # Determine if lower body based on exercise name
@@ -332,5 +481,90 @@ def _get_progressive_weight(exercise_name: str) -> float | None:
         return max_weight + increment
 
     except Exception as e:
-        # If anything fails, return None (no suggestion)
-        return None
+        # If anything fails, try beginner weight as last resort
+        try:
+            weight, _ = _get_beginner_weight(exercise_name)
+            return weight
+        except:
+            return None  # Last resort: no suggestion
+
+
+# ==================== EXERCISE INFO FOR UI ====================
+
+def get_exercise_info(exercise_name: str) -> dict:
+    """
+    Get comprehensive exercise information for UI display.
+
+    Provides exercise details from catalog including:
+    - Muscle groups
+    - Equipment needed
+    - Category (compound/isolation/bodyweight)
+    - Beginner weight and reasoning
+    - Whether user has done this exercise before
+
+    Args:
+        exercise_name: Name of the exercise
+
+    Returns:
+        Dict with exercise information:
+        {
+            "canonical_name": str,
+            "muscle_groups": list[str],
+            "equipment": list[str],
+            "category": str,
+            "body_region": str,
+            "is_first_time": bool,
+            "beginner_weight_lbs": float | None,
+            "weight_reasoning": str,
+            "found_in_catalog": bool
+        }
+    """
+    catalog = _load_exercise_catalog()
+
+    # Try to match exercise in catalog
+    matched_exercise = _fuzzy_match_exercise(exercise_name, catalog)
+
+    # Check if user has done this exercise before
+    try:
+        history = get_exercise_history.invoke({
+            "exercise": exercise_name,
+            "days": 365  # Check full year
+        })
+        is_first_time = not history or len(history) == 0
+    except:
+        is_first_time = True
+
+    # Get beginner weight (even if not first time, useful for reference)
+    beginner_weight, weight_reasoning = _get_beginner_weight(exercise_name)
+
+    if matched_exercise:
+        # Found in catalog - return full info
+        return {
+            "canonical_name": matched_exercise.get("canonical", exercise_name),
+            "muscle_groups": matched_exercise.get("muscle_groups", []),
+            "equipment": matched_exercise.get("equipment", []),
+            "category": matched_exercise.get("category", "unknown"),
+            "body_region": matched_exercise.get("body_region", "unknown"),
+            "is_first_time": is_first_time,
+            "beginner_weight_lbs": beginner_weight,
+            "weight_reasoning": weight_reasoning,
+            "found_in_catalog": True
+        }
+    else:
+        # Not in catalog - return minimal info
+        category = _classify_exercise_for_default(exercise_name)
+
+        # Infer body region from category
+        body_region = "lower" if "lower" in category else "upper"
+
+        return {
+            "canonical_name": exercise_name,
+            "muscle_groups": [],
+            "equipment": [],
+            "category": category.replace("_", " ").title(),
+            "body_region": body_region,
+            "is_first_time": is_first_time,
+            "beginner_weight_lbs": beginner_weight,
+            "weight_reasoning": weight_reasoning,
+            "found_in_catalog": False
+        }

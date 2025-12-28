@@ -115,7 +115,7 @@ class SessionWithPlanState(TypedDict):
     accumulated_exercises: list[dict]  # What user actually logged
     current_exercise_index: int  # Position in plan (0-based)
 
-    # Current exercise being added
+    # Current exercise being added (DEPRECATED - use set-by-set fields below)
     current_exercise_input: str | None
     current_parsed_exercise: dict | None
 
@@ -125,6 +125,26 @@ class SessionWithPlanState(TypedDict):
     #   source: "plan" | "adaptive",
     #   exercise_name, target_sets, target_reps,
     #   suggested_weight_lbs, reasoning, plan_index
+    # }
+
+    # Set-by-set tracking (NEW)
+    in_progress_exercise: dict | None  # Exercise being built set-by-set
+    # {
+    #   "name": "Bench Press",
+    #   "sets": [{"reps": 10, "weight_lbs": 135}],  # Sets completed so far
+    #   "target_sets": 4,
+    #   "target_reps": 10
+    # }
+    current_exercise_name: str | None  # Name of exercise in progress
+    current_exercise_sets_completed: list[dict]  # Sets recorded so far
+    current_set_number: int  # Which set we're on (1, 2, 3, etc.)
+    target_sets: int  # Total planned sets for this exercise
+    current_set_suggestion: dict | None  # Suggestion for THIS specific set
+    # {
+    #   "set_number": 1,
+    #   "target_reps": 10,
+    #   "suggested_weight_lbs": 135,
+    #   "rest_seconds": 90
     # }
 
     # Deviation Detection (Phase 3)
@@ -377,6 +397,9 @@ def initialize_planning(state: SessionWithPlanState) -> SessionWithPlanState:
             "adaptive": True
         })
 
+        # DEBUG: Log template resolution
+        print(f"DEBUG: Template for {suggested_type}: found={template_result.get('found')}, mode={template_result.get('mode')}, exercises={len(template_result.get('exercises', []))}")
+
         template = template_result if template_result.get('found') else {
             "id": f"basic_{suggested_type.lower()}",
             "name": f"{suggested_type} Workout",
@@ -384,6 +407,10 @@ def initialize_planning(state: SessionWithPlanState) -> SessionWithPlanState:
             "exercises": [],
             "mode": "static"
         }
+
+        # WARN if fallback triggered
+        if not template_result.get('found'):
+            print(f"⚠️ WARNING: No template found for {suggested_type}, using empty fallback")
 
         # Initialize planning state
         now = datetime.now().isoformat()
@@ -515,6 +542,107 @@ def generate_next_suggestion(state: SessionWithPlanState) -> SessionWithPlanStat
             "next_suggestion": None,
             "response": f"Could not generate suggestion: {str(e)}"
         }
+
+
+def generate_next_set_suggestion(state: SessionWithPlanState) -> dict | None:
+    """
+    Generate suggestion for the next SET (not exercise).
+
+    This is used for set-by-set recording flow where each set is recorded individually.
+
+    Logic:
+    - If in_progress_exercise is None: First set of a new exercise
+      → Pull from next_suggestion or planned_template
+    - If in_progress_exercise exists: Next set of same exercise
+      → Increment set number, use same exercise details
+
+    Args:
+        state: Current SessionWithPlanState
+
+    Returns:
+        Set suggestion dict or None if no suggestion available:
+        {
+            "set_number": 1,
+            "target_reps": 10,
+            "suggested_weight_lbs": 135.0,
+            "rest_seconds": 90,
+            "exercise_name": "Bench Press"
+        }
+    """
+    try:
+        in_progress = state.get('in_progress_exercise')
+
+        if in_progress is not None:
+            # Next set of current exercise
+            current_set_num = state.get('current_set_number', 0)
+            target_sets = state.get('target_sets', 0)
+
+            # Check if we've completed all planned sets
+            if current_set_num >= target_sets:
+                return None  # Exercise complete
+
+            # Get details from in_progress_exercise
+            exercise_name = in_progress.get('name', 'Unknown')
+            target_reps = in_progress.get('target_reps', 10)
+
+            # Get rest seconds from in_progress or default
+            rest_seconds = in_progress.get('rest_seconds', 90)
+
+            # Calculate suggested weight based on last set's performance
+            sets_completed = in_progress.get('sets', [])
+            if sets_completed:
+                # Use last set's weight as suggestion
+                last_set = sets_completed[-1]
+                suggested_weight = last_set.get('weight_lbs')
+            else:
+                # Use initial suggestion if available
+                suggested_weight = in_progress.get('suggested_weight_lbs')
+
+            return {
+                "set_number": current_set_num + 1,
+                "target_reps": target_reps,
+                "suggested_weight_lbs": suggested_weight,
+                "rest_seconds": rest_seconds,
+                "exercise_name": exercise_name
+            }
+
+        else:
+            # First set of a new exercise
+            # Try to get from next_suggestion first (AI-generated)
+            next_suggestion = state.get('next_suggestion')
+
+            if next_suggestion and next_suggestion.get('exercise_name'):
+                # Use AI suggestion
+                return {
+                    "set_number": 1,
+                    "target_reps": next_suggestion.get('target_reps', 10),
+                    "suggested_weight_lbs": next_suggestion.get('suggested_weight_lbs'),
+                    "rest_seconds": next_suggestion.get('rest_seconds', 90),
+                    "exercise_name": next_suggestion.get('exercise_name')
+                }
+
+            # Fallback: Get from planned template
+            planned_template = state.get('planned_template', {})
+            plan_exercises = planned_template.get('exercises', [])
+            current_index = state.get('current_exercise_index', 0)
+
+            if current_index < len(plan_exercises):
+                planned_ex = plan_exercises[current_index]
+
+                return {
+                    "set_number": 1,
+                    "target_reps": planned_ex.get('target_reps', 10),
+                    "suggested_weight_lbs": planned_ex.get('suggested_weight_lbs'),
+                    "rest_seconds": planned_ex.get('rest_seconds', 90),
+                    "exercise_name": planned_ex.get('name', 'Unknown')
+                }
+
+            # No suggestion available
+            return None
+
+    except Exception as e:
+        print(f"Error generating set suggestion: {str(e)}")
+        return None
 
 
 # ============================================================================
@@ -975,6 +1103,13 @@ def initialize_planning_session() -> dict:
         "current_parsed_exercise": None,
         "next_suggestion": None,  # Phase 2: AI suggestions
         "current_deviation": None,  # Phase 3: Deviation detection
+        # Set-by-set tracking fields (NEW)
+        "in_progress_exercise": None,
+        "current_exercise_name": None,
+        "current_exercise_sets_completed": [],
+        "current_set_number": 0,  # 0 means no set in progress
+        "target_sets": 0,
+        "current_set_suggestion": None,
         "user_action": None,
         "saved": False,
         "workout_id": None,

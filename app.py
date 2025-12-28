@@ -34,6 +34,25 @@ st.set_page_config(
 # Initialize session state
 init_session_state()
 
+# Validate templates exist for all workout types
+def validate_templates():
+    """Validate that all workout types have corresponding templates."""
+    from src.data import get_template
+    required_types = ["Push", "Pull", "Legs", "Upper", "Lower"]
+    missing = []
+
+    for workout_type in required_types:
+        template = get_template(workout_type.lower())
+        if not template:
+            missing.append(workout_type)
+
+    if missing:
+        st.warning(f"⚠️ Missing templates for: {', '.join(missing)}")
+        st.caption("Some workout types may not load properly. Check data/templates.json")
+
+# Call validation on app startup
+validate_templates()
+
 # Render bottom navigation
 st.session_state.current_page = 'Home'
 render_bottom_nav('Home')

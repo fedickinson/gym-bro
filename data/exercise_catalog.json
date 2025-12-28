@@ -1,0 +1,454 @@
+{
+  "exercises": [
+    {
+      "canonical": "Dumbbell Bench Press",
+      "variations": ["DB Bench Press", "DB Bench", "Dumbbell Press"],
+      "muscle_groups": ["Chest", "Triceps", "Shoulders"],
+      "equipment": ["Dumbbells", "Bench"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 20.0,
+        "per_hand": true,
+        "reasoning": "Start with 20 lbs per hand - focus on controlled reps with proper form"
+      }
+    },
+    {
+      "canonical": "Barbell Bench Press",
+      "variations": ["BB Bench Press", "Bench Press", "Flat Bench"],
+      "muscle_groups": ["Chest", "Triceps", "Shoulders"],
+      "equipment": ["Barbell", "Bench"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 45.0,
+        "per_hand": false,
+        "reasoning": "Start with just the bar (45 lbs) - master the movement before adding plates"
+      }
+    },
+    {
+      "canonical": "Incline Dumbbell Press",
+      "variations": ["Incline DB Press", "Incline Press"],
+      "muscle_groups": ["Upper Chest", "Shoulders", "Triceps"],
+      "equipment": ["Dumbbells", "Incline Bench"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 20.0,
+        "per_hand": true,
+        "reasoning": "20 lbs per hand - incline is harder than flat, focus on upper chest contraction"
+      }
+    },
+    {
+      "canonical": "Overhead Press",
+      "variations": ["Military Press", "Shoulder Press", "OHP"],
+      "muscle_groups": ["Shoulders", "Triceps"],
+      "equipment": ["Dumbbells"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 15.0,
+        "per_hand": true,
+        "reasoning": "15 lbs per hand - shoulders are delicate, prioritize strict form over weight"
+      }
+    },
+    {
+      "canonical": "Cable Fly",
+      "variations": ["Cable Flys", "Cable Chest Fly"],
+      "muscle_groups": ["Chest"],
+      "equipment": ["Cable Machine"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 20.0,
+        "per_hand": false,
+        "reasoning": "20 lbs total - focus on the stretch and squeeze, not the weight"
+      }
+    },
+    {
+      "canonical": "Tricep Pushdown",
+      "variations": ["Cable Pushdown", "Tricep Cable Pushdown"],
+      "muscle_groups": ["Triceps"],
+      "equipment": ["Cable Machine"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 30.0,
+        "per_hand": false,
+        "reasoning": "30 lbs - keep elbows tucked, full extension at bottom"
+      }
+    },
+    {
+      "canonical": "Tricep Extension",
+      "variations": ["Overhead Tricep Extension", "Skull Crusher"],
+      "muscle_groups": ["Triceps"],
+      "equipment": ["Dumbbells"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 15.0,
+        "per_hand": true,
+        "reasoning": "15 lbs - protect elbows, controlled movement throughout"
+      }
+    },
+    {
+      "canonical": "Lateral Raise",
+      "variations": ["Side Raise", "Dumbbell Lateral Raise", "DB Lateral Raise"],
+      "muscle_groups": ["Shoulders"],
+      "equipment": ["Dumbbells"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 10.0,
+        "per_hand": true,
+        "reasoning": "10 lbs per hand - very light, focus on time under tension and shoulder burn"
+      }
+    },
+    {
+      "canonical": "Front Raise",
+      "variations": ["Dumbbell Front Raise", "DB Front Raise"],
+      "muscle_groups": ["Shoulders"],
+      "equipment": ["Dumbbells"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 10.0,
+        "per_hand": true,
+        "reasoning": "10 lbs - keep core engaged, avoid swinging"
+      }
+    },
+    {
+      "canonical": "Push Ups",
+      "variations": ["Pushups", "Push Up"],
+      "muscle_groups": ["Chest", "Triceps", "Core"],
+      "equipment": [],
+      "category": "bodyweight",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": null,
+        "per_hand": false,
+        "reasoning": "Bodyweight exercise - start with knee push-ups if needed, progress to full"
+      }
+    },
+    {
+      "canonical": "Lat Pulldown",
+      "variations": ["Pulldown", "Lat Pull Down"],
+      "muscle_groups": ["Lats", "Biceps"],
+      "equipment": ["Cable Machine"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 40.0,
+        "per_hand": false,
+        "reasoning": "40 lbs - focus on pulling with your back, not arms"
+      }
+    },
+    {
+      "canonical": "Dumbbell Row",
+      "variations": ["DB Row", "Single Arm Row", "One Arm Row"],
+      "muscle_groups": ["Lats", "Rhomboids", "Biceps"],
+      "equipment": ["Dumbbells", "Bench"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 25.0,
+        "per_hand": true,
+        "reasoning": "25 lbs per hand - retract scapula, pull to hip not chest"
+      }
+    },
+    {
+      "canonical": "Barbell Row",
+      "variations": ["BB Row", "Bent Over Row"],
+      "muscle_groups": ["Lats", "Rhomboids", "Lower Back"],
+      "equipment": ["Barbell"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 65.0,
+        "per_hand": false,
+        "reasoning": "65 lbs - maintain hip hinge, pull to lower chest"
+      }
+    },
+    {
+      "canonical": "Face Pulls",
+      "variations": ["Face Pull", "Cable Face Pull"],
+      "muscle_groups": ["Rear Delts", "Traps"],
+      "equipment": ["Cable Machine"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 25.0,
+        "per_hand": false,
+        "reasoning": "25 lbs - pull to face, external rotation at end"
+      }
+    },
+    {
+      "canonical": "Bicep Curl",
+      "variations": ["DB Curl", "Dumbbell Curl", "Curls"],
+      "muscle_groups": ["Biceps"],
+      "equipment": ["Dumbbells"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 15.0,
+        "per_hand": true,
+        "reasoning": "15 lbs per hand - no swinging, strict form for bicep growth"
+      }
+    },
+    {
+      "canonical": "Hammer Curl",
+      "variations": ["Hammer Curls", "Neutral Grip Curl"],
+      "muscle_groups": ["Biceps", "Forearms"],
+      "equipment": ["Dumbbells"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 15.0,
+        "per_hand": true,
+        "reasoning": "15 lbs - neutral grip hits brachialis, keep wrists neutral"
+      }
+    },
+    {
+      "canonical": "Cable Row",
+      "variations": ["Seated Cable Row", "Seated Row"],
+      "muscle_groups": ["Lats", "Rhomboids"],
+      "equipment": ["Cable Machine"],
+      "category": "compound",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 40.0,
+        "per_hand": false,
+        "reasoning": "40 lbs - squeeze shoulder blades together at the end"
+      }
+    },
+    {
+      "canonical": "Pull Ups",
+      "variations": ["Pull Up", "Pullups", "Chin Ups"],
+      "muscle_groups": ["Lats", "Biceps"],
+      "equipment": [],
+      "category": "bodyweight",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": null,
+        "per_hand": false,
+        "reasoning": "Bodyweight - use assisted pull-up machine or resistance bands if needed"
+      }
+    },
+    {
+      "canonical": "Squat",
+      "variations": ["Back Squat", "Barbell Squat", "BB Squat"],
+      "muscle_groups": ["Quads", "Glutes", "Core"],
+      "equipment": ["Barbell", "Rack"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 65.0,
+        "per_hand": false,
+        "reasoning": "65 lbs (bar + 10s) - depth is more important than weight, break parallel"
+      }
+    },
+    {
+      "canonical": "Leg Press",
+      "variations": ["Machine Leg Press"],
+      "muscle_groups": ["Quads", "Glutes"],
+      "equipment": ["Leg Press Machine"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 90.0,
+        "per_hand": false,
+        "reasoning": "90 lbs - full range of motion, knees to chest"
+      }
+    },
+    {
+      "canonical": "Deadlift",
+      "variations": ["Barbell Deadlift", "Conventional Deadlift"],
+      "muscle_groups": ["Hamstrings", "Glutes", "Lower Back", "Traps"],
+      "equipment": ["Barbell"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 95.0,
+        "per_hand": false,
+        "reasoning": "95 lbs (bar + 25s) - perfect form is critical, hinge at hips"
+      }
+    },
+    {
+      "canonical": "Romanian Deadlift",
+      "variations": ["RDL", "Stiff Leg Deadlift"],
+      "muscle_groups": ["Hamstrings", "Glutes"],
+      "equipment": ["Barbell"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 65.0,
+        "per_hand": false,
+        "reasoning": "65 lbs - feel the hamstring stretch, slight knee bend"
+      }
+    },
+    {
+      "canonical": "Leg Curl",
+      "variations": ["Hamstring Curl", "Lying Leg Curl"],
+      "muscle_groups": ["Hamstrings"],
+      "equipment": ["Leg Curl Machine"],
+      "category": "isolation",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 50.0,
+        "per_hand": false,
+        "reasoning": "50 lbs - full contraction at top, slow eccentric"
+      }
+    },
+    {
+      "canonical": "Leg Extension",
+      "variations": ["Quad Extension"],
+      "muscle_groups": ["Quads"],
+      "equipment": ["Leg Extension Machine"],
+      "category": "isolation",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 50.0,
+        "per_hand": false,
+        "reasoning": "50 lbs - squeeze quads at full extension, controlled descent"
+      }
+    },
+    {
+      "canonical": "Calf Raise",
+      "variations": ["Standing Calf Raise", "Seated Calf Raise"],
+      "muscle_groups": ["Calves"],
+      "equipment": ["Calf Raise Machine"],
+      "category": "isolation",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 100.0,
+        "per_hand": false,
+        "reasoning": "100 lbs - calves are strong, full stretch at bottom, pause at top"
+      }
+    },
+    {
+      "canonical": "Lunge",
+      "variations": ["Walking Lunge", "Dumbbell Lunge", "DB Lunge"],
+      "muscle_groups": ["Quads", "Glutes"],
+      "equipment": ["Dumbbells"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 15.0,
+        "per_hand": true,
+        "reasoning": "15 lbs per hand - balance is challenging, knee shouldn't pass toes"
+      }
+    },
+    {
+      "canonical": "Bulgarian Split Squat",
+      "variations": ["Split Squat", "Rear Foot Elevated Split Squat"],
+      "muscle_groups": ["Quads", "Glutes"],
+      "equipment": ["Dumbbells", "Bench"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 15.0,
+        "per_hand": true,
+        "reasoning": "15 lbs per hand - very challenging for balance, start light"
+      }
+    },
+    {
+      "canonical": "Hip Thrust",
+      "variations": ["Barbell Hip Thrust", "Glute Bridge"],
+      "muscle_groups": ["Glutes", "Hamstrings"],
+      "equipment": ["Barbell", "Bench"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 65.0,
+        "per_hand": false,
+        "reasoning": "65 lbs - squeeze glutes at top, use pad for comfort"
+      }
+    },
+    {
+      "canonical": "Goblet Squat",
+      "variations": ["DB Goblet Squat"],
+      "muscle_groups": ["Quads", "Glutes"],
+      "equipment": ["Dumbbell"],
+      "category": "compound",
+      "body_region": "lower",
+      "beginner_weight": {
+        "lbs": 25.0,
+        "per_hand": false,
+        "reasoning": "25 lbs total - great for learning squat form, deep as possible"
+      }
+    },
+    {
+      "canonical": "Dips",
+      "variations": ["Tricep Dips", "Chest Dips"],
+      "muscle_groups": ["Chest", "Triceps", "Shoulders"],
+      "equipment": [],
+      "category": "bodyweight",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": null,
+        "per_hand": false,
+        "reasoning": "Bodyweight - use assisted dip machine if needed, lean forward for chest"
+      }
+    },
+    {
+      "canonical": "Plank",
+      "variations": ["Front Plank", "Forearm Plank"],
+      "muscle_groups": ["Core", "Abs"],
+      "equipment": [],
+      "category": "bodyweight",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": null,
+        "per_hand": false,
+        "reasoning": "Bodyweight - hold for time, keep hips level, engage core"
+      }
+    },
+    {
+      "canonical": "Cable Crossover",
+      "variations": ["Cable Cross", "High Cable Fly"],
+      "muscle_groups": ["Chest"],
+      "equipment": ["Cable Machine"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 15.0,
+        "per_hand": false,
+        "reasoning": "15 lbs - focus on chest squeeze, not moving heavy weight"
+      }
+    },
+    {
+      "canonical": "Preacher Curl",
+      "variations": ["EZ Bar Preacher Curl", "Machine Preacher Curl"],
+      "muscle_groups": ["Biceps"],
+      "equipment": ["EZ Bar", "Preacher Bench"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 40.0,
+        "per_hand": false,
+        "reasoning": "40 lbs - strict form only, no momentum possible"
+      }
+    },
+    {
+      "canonical": "Shrugs",
+      "variations": ["Dumbbell Shrugs", "Trap Shrugs"],
+      "muscle_groups": ["Traps"],
+      "equipment": ["Dumbbells"],
+      "category": "isolation",
+      "body_region": "upper",
+      "beginner_weight": {
+        "lbs": 30.0,
+        "per_hand": true,
+        "reasoning": "30 lbs per hand - straight up and down, squeeze traps at top"
+      }
+    }
+  ],
+  "default_weights": {
+    "compound_upper": 25.0,
+    "compound_lower": 95.0,
+    "isolation_upper": 15.0,
+    "isolation_lower": 50.0,
+    "bodyweight": null,
+    "cable_machine": 30.0
+  }
+}
