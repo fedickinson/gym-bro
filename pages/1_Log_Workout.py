@@ -81,9 +81,27 @@ def render_planning_chat_state():
 
     session = st.session_state.workout_session
 
-    # Show AI suggestion
-    st.success(f"**Suggested:** {session.get('suggested_type', 'Push')}")
-    st.caption(session.get('suggestion_reason', 'Based on your weekly split'))
+    # === Weekly Progress Summary ===
+    from src.ui.planning_components import render_weekly_progress_summary
+    render_weekly_progress_summary()
+
+    st.divider()
+
+    # === NEW: Catch-Up Mode Detection ===
+    catch_up_mode = session.get('catch_up_mode', False)
+
+    if catch_up_mode:
+        from src.ui.planning_components import render_catch_up_suggestion
+
+        catch_up_workouts = session.get('catch_up_workouts', [])
+        days_left = session.get('days_left_in_week', 1)
+        catch_up_count = session.get('catch_up_count', 0)
+
+        render_catch_up_suggestion(catch_up_workouts, days_left, catch_up_count)
+    else:
+        # Normal mode - single suggestion
+        st.success(f"**Suggested:** {session.get('suggested_type', 'Push')}")
+        st.caption(session.get('suggestion_reason', 'Based on your weekly split'))
 
     st.divider()
 
@@ -1920,6 +1938,39 @@ elif st.session_state.log_state == 'saved':
     st.balloons()
     st.success("✅ Workout Saved!")
     st.title("Great job! 💪")
+
+    # NEW: Check if still in catch-up mode
+    from src.tools.recommend_tools import get_weekly_split_status
+
+    status = get_weekly_split_status.invoke({})
+    remaining = status.get("remaining", {})
+    days_left = status.get("days_left_in_week", 0)
+    total_remaining = sum(remaining.values())
+
+    # If still need more workouts today (catch-up mode)
+    if total_remaining > 0 and days_left <= 1:
+        st.divider()
+        st.warning(f"⚡ **Catch-up reminder:** You still have {total_remaining} workout(s) to complete this week!")
+
+        # Get the next needed workout type
+        next_needed_types = [t for t, count in remaining.items() if count > 0]
+        if next_needed_types:
+            next_type = next_needed_types[0]
+
+            # Quick restart button for next workout
+            if st.button(
+                f"🏋️ Start Next Workout ({next_type})",
+                type="primary",
+                use_container_width=True,
+                key="start_next_catchup"
+            ):
+                # Reset session and go back to planning
+                from src.ui.session import reset_workout_session
+                reset_workout_session()
+                st.session_state.log_state = 'planning_chat'
+                st.rerun()
+
+        st.divider()
 
     # Show what's next
     st.divider()

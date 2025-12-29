@@ -391,26 +391,54 @@ def initialize_planning(state: SessionWithPlanState) -> SessionWithPlanState:
         suggested_type = suggestion.get('suggested_type', 'Push')
         reason = suggestion.get('reason', 'Based on your weekly split')
 
-        # Generate adaptive template for this type
-        template_result = get_workout_template.invoke({
-            "workout_type": suggested_type,
-            "adaptive": True
-        })
+        # NEW: Check if catch-up mode triggered
+        catch_up_mode = suggestion.get("catch_up_mode", False)
+        express_recommended = suggestion.get("express_recommended", False)
 
-        # DEBUG: Log template resolution
-        print(f"DEBUG: Template for {suggested_type}: found={template_result.get('found')}, mode={template_result.get('mode')}, exercises={len(template_result.get('exercises', []))}")
+        # Generate template (Express or Adaptive)
+        import streamlit as st
+        if catch_up_mode and express_recommended and st.session_state.get('use_express_mode', True):
+            # Catch-up mode with Express enabled
+            from src.agents.template_generator import generate_express_template
 
-        template = template_result if template_result.get('found') else {
-            "id": f"basic_{suggested_type.lower()}",
-            "name": f"{suggested_type} Workout",
-            "type": suggested_type,
-            "exercises": [],
-            "mode": "static"
-        }
+            # Get base adaptive template first
+            base_template_result = get_workout_template.invoke({
+                "workout_type": suggested_type,
+                "adaptive": True
+            })
 
-        # WARN if fallback triggered
-        if not template_result.get('found'):
-            print(f"⚠️ WARNING: No template found for {suggested_type}, using empty fallback")
+            # Shorten it to Express version
+            if base_template_result.get("found"):
+                template = generate_express_template(
+                    suggested_type,
+                    base_template_result
+                )
+                print(f"✨ Generated Express template for {suggested_type}: {len(template.get('exercises', []))} exercises, ~{template.get('estimated_duration_min', 35)} min")
+            else:
+                # Fallback if no base template
+                template = generate_express_template(suggested_type)
+                print(f"✨ Generated Express template (no base) for {suggested_type}")
+        else:
+            # Normal adaptive template
+            template_result = get_workout_template.invoke({
+                "workout_type": suggested_type,
+                "adaptive": True
+            })
+
+            # DEBUG: Log template resolution
+            print(f"DEBUG: Template for {suggested_type}: found={template_result.get('found')}, mode={template_result.get('mode')}, exercises={len(template_result.get('exercises', []))}")
+
+            template = template_result if template_result.get('found') else {
+                "id": f"basic_{suggested_type.lower()}",
+                "name": f"{suggested_type} Workout",
+                "type": suggested_type,
+                "exercises": [],
+                "mode": "static"
+            }
+
+            # WARN if fallback triggered
+            if not template_result.get('found'):
+                print(f"⚠️ WARNING: No template found for {suggested_type}, using empty fallback")
 
         # Initialize planning state
         now = datetime.now().isoformat()
@@ -427,7 +455,12 @@ def initialize_planning(state: SessionWithPlanState) -> SessionWithPlanState:
             "equipment_available": None,
             "equipment_unavailable": None,
             "current_exercise_index": 0,
-            "response": f"AI suggests {suggested_type} workout today"
+            "response": f"AI suggests {suggested_type} workout today",
+            # NEW: Catch-up mode fields
+            "catch_up_mode": catch_up_mode,
+            "catch_up_workouts": suggestion.get("catch_up_workouts", []),
+            "catch_up_count": suggestion.get("catch_up_count", 0),
+            "days_left_in_week": suggestion.get("days_left_in_week", 7)
         }
 
     except Exception as e:

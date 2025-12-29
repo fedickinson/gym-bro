@@ -97,45 +97,81 @@ def get_weekly_split_status() -> dict:
 def suggest_next_workout() -> dict:
     """
     Suggest the next workout based on rotation and weekly progress.
-    
+
+    NEW: Includes catch-up mode detection when multiple workouts needed with limited time.
+
     Returns:
-        Suggested workout type with reasoning
+        Suggested workout type with reasoning, plus catch-up mode info if applicable
     """
     status = get_weekly_split_status.invoke({})
-    
+
     suggested = status.get("next_suggested", "Push")
     remaining = status.get("remaining", {})
     days_left = status.get("days_left_in_week", 7)
-    
-    # Build reasoning
+
+    # NEW: Calculate total workouts needed
+    total_remaining = sum(remaining.values())
+
+    # NEW: Catch-up mode detection
+    catch_up_mode = total_remaining > days_left and days_left > 0
+
+    if catch_up_mode:
+        # Get all workout types that need to be done
+        needed_types = [t for t, count in remaining.items() if count > 0]
+
+        # Sort needed types to prioritize the suggested one first
+        if suggested in needed_types:
+            needed_types.remove(suggested)
+            needed_types.insert(0, suggested)
+
+        # Get template if available
+        template = get_template(suggested.lower())
+        template_id = template.get("id") if template else None
+        template_name = template.get("name") if template else None
+
+        return {
+            "suggested_type": suggested,
+            "reason": f"Catch-up mode: {total_remaining} workouts needed in {days_left} day(s)",
+            "template_id": template_id,
+            "template_name": template_name,
+            "weekly_status": status,
+            "catch_up_mode": True,
+            "catch_up_workouts": needed_types,
+            "catch_up_count": total_remaining,
+            "express_recommended": True,
+            "days_left_in_week": days_left
+        }
+
+    # Normal mode (existing logic)
     reasons = []
-    
+
     # Check if behind on this type
     if remaining.get(suggested, 0) > 0:
         reasons.append(f"{suggested} is next in rotation")
         if remaining[suggested] > 1:
             reasons.append(f"You have {remaining[suggested]} more {suggested} workouts to hit your target")
-    
+
     # Check if any types are critically behind
     urgent = []
     for t, count in remaining.items():
         if count > 0 and count >= days_left:
             urgent.append(t)
-    
+
     if urgent and suggested not in urgent:
         reasons.append(f"Consider prioritizing: {', '.join(urgent)}")
-    
+
     # Get template if available
     template = get_template(suggested.lower())
     template_id = template.get("id") if template else None
     template_name = template.get("name") if template else None
-    
+
     return {
         "suggested_type": suggested,
         "reason": " | ".join(reasons) if reasons else "Next in standard rotation",
         "template_id": template_id,
         "template_name": template_name,
-        "weekly_status": status
+        "weekly_status": status,
+        "catch_up_mode": False
     }
 
 

@@ -60,6 +60,30 @@ INSTRUCTIONS:
    - Include reasoning mentioning "beginner weight" if applicable
 7. Provide a brief 1-2 sentence explanation of what changed
 
+## CATCH-UP MODE & EXPRESS WORKOUTS
+
+When the user is in catch-up mode (multiple workouts needed, limited days):
+1. **Suggest Express versions** - Shorter, efficient workouts
+2. **Express guidelines:**
+   - Keep heavy compound lifts (squat, bench, deadlift variations, rows, overhead press)
+   - Remove or reduce isolation exercises (lateral raises, curls, extensions unless critical)
+   - Reduce sets: 4→3, 3→2 (maintain intensity, reduce volume)
+   - Keep 1-2 accessories per muscle group (prioritize weak points)
+   - Target 30-35 min instead of 50-60 min
+   - Example: "Express Upper" = Incline Bench, Overhead Press, Cable Row, Lateral Raise, Curl (5 exercises vs 9)
+
+3. **Multi-workout recommendations:**
+   - If user needs 2+ workouts same day, suggest Express for both
+   - Example: "Express Upper (35 min) + Express Lower (35 min) = 70 min total"
+   - Show time estimates to help planning
+   - Prioritize getting both workouts done over perfecting one
+
+4. **Prioritization:**
+   - Compounds over isolation (strength > pump)
+   - Main movers over finishers (bench > cable fly)
+   - Core lifts over variations (squat > leg extension)
+   - Multi-joint over single-joint
+
 Return your response in this JSON format:
 {{
     "modified_template": {{

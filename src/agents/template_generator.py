@@ -169,6 +169,99 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
     }
 
 
+def generate_express_template(workout_type: str, base_template: Optional[Dict] = None) -> Dict[str, Any]:
+    """
+    Generate a shortened 'Express' version of a workout template.
+
+    Express workouts are designed for catch-up mode when multiple workouts
+    are needed with limited time. They maintain training effectiveness while
+    reducing total workout duration.
+
+    Express guidelines:
+    - Keep compound lifts (squat, deadlift, press, row variations)
+    - Remove or reduce isolation exercises
+    - Reduce sets: 4→3, 3→2, 2→2
+    - Target 5-6 exercises max (vs 8-10 normal)
+    - Target 30-35 min total time
+
+    Args:
+        workout_type: Push, Pull, Legs, Upper, Lower
+        base_template: Optional base template to shorten. If None, fetches template for workout_type.
+
+    Returns:
+        Express template dict with shortened exercise list and reduced sets
+    """
+    # Get base template if not provided
+    if not base_template:
+        base_template = get_template(workout_type.lower() + "_a")
+
+    if not base_template:
+        return {
+            "error": f"No template found for {workout_type}",
+            "mode": "error"
+        }
+
+    exercises = base_template.get("exercises", [])
+
+    # Compound exercise keywords for prioritization
+    compound_keywords = [
+        "squat", "deadlift", "press", "bench", "row", "pulldown",
+        "pull up", "dip", "lunge", "hip thrust"
+    ]
+
+    def is_compound(exercise_name: str) -> bool:
+        """Check if an exercise is a compound lift."""
+        name_lower = exercise_name.lower()
+        return any(kw in name_lower for kw in compound_keywords)
+
+    # Categorize exercises into compounds and accessories
+    compounds = []
+    accessories = []
+
+    for ex in exercises:
+        ex_name = ex.get("name", "")
+        if is_compound(ex_name):
+            compounds.append(ex.copy())  # Make copy to avoid mutating original
+        else:
+            accessories.append(ex.copy())
+
+    # Express selection strategy:
+    # - Keep up to 4 compound exercises (these are critical for strength)
+    # - Add 2 accessories max (target weak points or muscle balance)
+    express_exercises = compounds[:4]
+    express_exercises.extend(accessories[:2])
+
+    # Reduce sets to shorten workout time while maintaining intensity
+    for ex in express_exercises:
+        original_sets = ex.get("target_sets", 3)
+
+        # Set reduction logic
+        if original_sets >= 4:
+            ex["target_sets"] = 3  # 4+ sets → 3 sets
+        elif original_sets == 3:
+            ex["target_sets"] = 2  # 3 sets → 2 sets
+        # 2 sets stays at 2
+
+        # Keep rest_seconds and target_reps unchanged to maintain intensity
+
+    # Calculate estimated duration
+    # Estimate: 1 min per set + rest time, plus 5 min warmup
+    total_sets = sum(ex.get("target_sets", 3) for ex in express_exercises)
+    avg_rest = sum(ex.get("rest_seconds", 60) for ex in express_exercises) / len(express_exercises) if express_exercises else 60
+    estimated_duration = 5 + total_sets * (1 + avg_rest / 60)  # warmup + (work + rest) per set
+
+    return {
+        "id": f"express_{workout_type.lower()}",
+        "name": f"Express {workout_type}",
+        "type": workout_type,
+        "exercises": express_exercises,
+        "mode": "express",
+        "notes": f"Shortened version: {len(express_exercises)} exercises, ~{int(estimated_duration)} min. Prioritizes compound lifts.",
+        "estimated_duration_min": int(estimated_duration),
+        "base_template_id": base_template.get("id")
+    }
+
+
 def _get_exercise_frequency(exercise_name: str, patterns: Dict) -> float:
     """Get frequency of an exercise from pattern analysis."""
     for ex in patterns.get("common_exercises", []):
