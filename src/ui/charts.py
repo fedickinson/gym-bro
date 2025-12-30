@@ -173,14 +173,19 @@ def create_volume_trends_chart(days: int = 90) -> go.Figure:
     Create a bar chart showing total training volume (weight × reps) per week.
 
     Args:
-        days: Number of days to look back
+        days: Number of days to look back (0 = all time)
 
     Returns:
         Plotly figure object
     """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
-    logs = get_logs_by_date_range(start_date, end_date)
+    if days == 0:
+        # All time - get all logs
+        logs = get_all_logs()
+    else:
+        # Specific time range
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+        logs = get_logs_by_date_range(start_date, end_date)
 
     # Calculate weekly volume
     weekly_volume = {}
@@ -272,14 +277,34 @@ def create_frequency_heatmap(days: int = 90) -> go.Figure:
     Create a calendar heatmap showing workout frequency over time.
 
     Args:
-        days: Number of days to look back
+        days: Number of days to look back (0 = all time)
 
     Returns:
         Plotly figure object
     """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
-    logs = get_logs_by_date_range(start_date, end_date)
+    if days == 0:
+        # All time - get all logs
+        logs = get_all_logs()
+        # For all-time, use actual date range from data
+        if logs:
+            all_dates = [log.get('date') for log in logs if log.get('date')]
+            if all_dates:
+                start_date = date.fromisoformat(min(all_dates))
+                end_date = date.today()
+                days = (end_date - start_date).days
+            else:
+                start_date = date.today()
+                end_date = date.today()
+                days = 0
+        else:
+            start_date = date.today()
+            end_date = date.today()
+            days = 0
+    else:
+        # Specific time range
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+        logs = get_logs_by_date_range(start_date, end_date)
 
     # Create date -> count mapping
     date_counts = {}
@@ -333,7 +358,6 @@ def create_frequency_heatmap(days: int = 90) -> go.Figure:
         showscale=True,
         colorbar=dict(
             title="Workouts",
-            titleside="right",
             tickmode="linear",
             tick0=0,
             dtick=1
@@ -360,14 +384,19 @@ def get_unique_exercises(days: int = 90) -> list[str]:
     Get a list of unique exercises from recent workouts.
 
     Args:
-        days: Number of days to look back
+        days: Number of days to look back (0 = all time)
 
     Returns:
         Sorted list of unique exercise names
     """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
-    logs = get_logs_by_date_range(start_date, end_date)
+    if days == 0:
+        # All time - get all logs
+        logs = get_all_logs()
+    else:
+        # Specific time range
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+        logs = get_logs_by_date_range(start_date, end_date)
 
     exercises = set()
     for log in logs:

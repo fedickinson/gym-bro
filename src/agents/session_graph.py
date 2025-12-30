@@ -147,6 +147,15 @@ class SessionWithPlanState(TypedDict):
     #   "rest_seconds": 90
     # }
 
+    # Abs workout fields (supplementary work)
+    abs_planned_template: dict | None  # AI-recommended abs template
+    abs_accumulated_exercises: list[dict]  # Completed abs exercises
+    abs_in_progress_exercise: dict | None  # Current abs exercise being built
+    abs_current_exercise_index: int  # Position in abs template
+    abs_current_set_number: int  # Current abs set number
+    abs_target_sets: int  # Total sets for current abs exercise
+    abs_current_set_suggestion: dict | None  # Suggestion for current abs set
+
     # Deviation Detection (Phase 3)
     current_deviation: dict | None
     # {
@@ -321,6 +330,10 @@ def save_session_workout(state: SessionWorkoutState) -> SessionWorkoutState:
             "notes": f"Session logged incrementally (Session ID: {session_id})",
             "completed": True
         }
+
+        # Add supplementary work if present
+        if state.get("supplementary_work"):
+            workout_log["supplementary_work"] = state.get("supplementary_work")
 
         # Phase 6: Add session metadata if SessionWithPlanState
         if "suggested_type" in state:  # SessionWithPlanState

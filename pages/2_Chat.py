@@ -62,6 +62,66 @@ st.caption("Ask questions about your workouts, get recommendations, or just chat
 # ============================================================================
 
 with st.sidebar:
+    st.title("🏋️ Gym Bro")
+    st.caption("AI Fitness Coach")
+
+    st.divider()
+
+    # Quick navigation
+    st.subheader("Quick Links")
+
+    if st.button("🏠 Home", key="sidebar_chat_home", use_container_width=True):
+        st.switch_page("app.py")
+
+    if st.button("📅 View History", key="sidebar_chat_history", use_container_width=True):
+        st.switch_page("pages/3_History.py")
+
+    if st.button("📊 View Progress", key="sidebar_chat_progress", use_container_width=True):
+        st.switch_page("pages/4_Progress.py")
+
+    if st.button("🗑️ View Trash", key="sidebar_chat_trash", use_container_width=True):
+        st.switch_page("pages/5_Trash.py")
+
+    st.divider()
+
+    # Quick stats
+    st.subheader("Stats")
+
+    try:
+        from src.data import get_workout_count, get_all_logs
+        from datetime import date, timedelta
+
+        workouts_last_7 = get_workout_count(7)
+        workouts_last_30 = get_workout_count(30)
+
+        st.metric("Last 7 Days", workouts_last_7)
+        st.metric("Last 30 Days", workouts_last_30)
+
+        # Workout streak
+        logs = get_all_logs()
+        if logs:
+            # Calculate streak (consecutive days with workouts)
+            logs_by_date = {}
+            for log in logs:
+                log_date = log.get('date')
+                if log_date:
+                    logs_by_date[log_date] = True
+
+            streak = 0
+            current_date = date.today()
+            while current_date.isoformat() in logs_by_date:
+                streak += 1
+                current_date -= timedelta(days=1)
+
+            if streak > 0:
+                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
+
+    except Exception as e:
+        st.caption("Stats unavailable")
+
+    st.divider()
+
+    # Chat-specific controls below
     st.subheader("Chat Controls")
 
     if st.button("🗑️ Clear History", use_container_width=True):
@@ -127,6 +187,9 @@ with st.sidebar:
 
     st.divider()
     st.caption(f"Total messages: {len(st.session_state.chat_history)}")
+
+    st.divider()
+    st.caption("Version 1.0.0")
 
 # ============================================================================
 # Chat Display

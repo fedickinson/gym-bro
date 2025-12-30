@@ -37,6 +37,71 @@ init_session_state()
 st.session_state.current_page = 'Log'
 render_bottom_nav('Log')
 
+# ============================================================================
+# Sidebar Navigation & Stats
+# ============================================================================
+
+with st.sidebar:
+    st.title("🏋️ Gym Bro")
+    st.caption("AI Fitness Coach")
+
+    st.divider()
+
+    # Quick navigation
+    st.subheader("Quick Links")
+
+    if st.button("🏠 Home", key="sidebar_log_home", use_container_width=True):
+        st.switch_page("app.py")
+
+    if st.button("📅 View History", key="sidebar_log_history", use_container_width=True):
+        st.switch_page("pages/3_History.py")
+
+    if st.button("📊 View Progress", key="sidebar_log_progress", use_container_width=True):
+        st.switch_page("pages/4_Progress.py")
+
+    if st.button("🗑️ View Trash", key="sidebar_log_trash", use_container_width=True):
+        st.switch_page("pages/5_Trash.py")
+
+    st.divider()
+
+    # Quick stats
+    st.subheader("Stats")
+
+    try:
+        from src.data import get_workout_count, get_all_logs
+        from datetime import date, timedelta
+
+        workouts_last_7 = get_workout_count(7)
+        workouts_last_30 = get_workout_count(30)
+
+        st.metric("Last 7 Days", workouts_last_7)
+        st.metric("Last 30 Days", workouts_last_30)
+
+        # Workout streak
+        logs = get_all_logs()
+        if logs:
+            # Calculate streak (consecutive days with workouts)
+            logs_by_date = {}
+            for log in logs:
+                log_date = log.get('date')
+                if log_date:
+                    logs_by_date[log_date] = True
+
+            streak = 0
+            current_date = date.today()
+            while current_date.isoformat() in logs_by_date:
+                streak += 1
+                current_date -= timedelta(days=1)
+
+            if streak > 0:
+                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
+
+    except Exception as e:
+        st.caption("Stats unavailable")
+
+    st.divider()
+    st.caption("Version 1.0.0")
+
 # Desktop optimizations
 st.markdown("""
 <style>
@@ -1876,6 +1941,586 @@ def _complete_exercise_and_continue(session):
     st.rerun()
 
 
+def render_abs_exercise_complete():
+    """Show abs exercise summary and move to next or finish."""
+    st.title("✅ Exercise Complete")
+
+    session = st.session_state.workout_session
+    in_progress = session.get('abs_in_progress_exercise')
+
+    if not in_progress:
+        st.error("No abs exercise in progress")
+        return
+
+    exercise_name = in_progress.get('name', 'Unknown')
+    all_sets = in_progress.get('sets', [])
+
+    # Show exercise summary
+    st.success(f"**{exercise_name}**")
+    st.caption(f"Completed {len(all_sets)} sets")
+
+    st.divider()
+
+    # Show all sets
+    st.subheader("Sets Completed")
+    for i, set_data in enumerate(all_sets, 1):
+        reps = set_data.get('reps')
+        notes = set_data.get('notes', '')
+        if notes:
+            st.caption(f"Set {i}: {reps} reps - {notes}")
+        else:
+            st.caption(f"Set {i}: {reps} reps")
+
+    st.divider()
+
+    # Move exercise to accumulated
+    abs_accumulated = session.get('abs_accumulated_exercises', [])
+    abs_accumulated.append({
+        'name': exercise_name,
+        'sets': all_sets
+    })
+    session['abs_accumulated_exercises'] = abs_accumulated
+
+    # Clear in-progress state
+    session['abs_in_progress_exercise'] = None
+    session['abs_current_set_number'] = 0
+
+    # Increment exercise index
+    current_index = session.get('abs_current_exercise_index', 0)
+    session['abs_current_exercise_index'] = current_index + 1
+
+    st.session_state.workout_session = session
+
+    # Check if more exercises
+    abs_template = session.get('abs_planned_template', {})
+    total_exercises = len(abs_template.get('exercises', []))
+    exercises_done = len(abs_accumulated)
+
+    if exercises_done >= total_exercises:
+        # All abs exercises complete
+        st.success("🎉 All abs exercises complete!")
+
+        if st.button("Review Abs Session", key="abs_all_complete", type="primary", use_container_width=True):
+            st.session_state.log_state = 'abs_workout_review'
+            st.rerun()
+    else:
+        # More exercises remaining
+        st.info(f"✅ Exercise {exercises_done} of {total_exercises} complete")
+
+        st.divider()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("▶️ Next Exercise", key="abs_next_exercise", type="primary", use_container_width=True):
+                st.session_state.log_state = 'abs_exercise_intro'
+                st.rerun()
+
+        with col2:
+            if st.button("✅ Finish Abs", key="abs_finish_early", use_container_width=True):
+                st.session_state.log_state = 'abs_workout_review'
+                st.rerun()
+
+
+def render_abs_set_preview():
+    """Show abs set preview with rest timer."""
+    import time
+
+    st.title("✅ Set Recorded")
+
+    session = st.session_state.workout_session
+
+    # Show overall abs progress
+    abs_accumulated = session.get('abs_accumulated_exercises', [])
+    abs_template = session.get('abs_planned_template', {})
+    total_abs_exercises = len(abs_template.get('exercises', []))
+    current_exercise_num = len(abs_accumulated) + 1
+
+    st.caption(f"💪 Abs Exercise {current_exercise_num} of {total_abs_exercises}")
+
+    in_progress = session.get('abs_in_progress_exercise')
+
+    if not in_progress:
+        st.error("No abs exercise in progress")
+        return
+
+    exercise_name = in_progress.get('name', 'Unknown')
+    all_sets = in_progress.get('sets', [])
+    current_set_number = session.get('abs_current_set_number', 1)
+    target_sets = session.get('abs_target_sets', 0)
+    rest_seconds = in_progress.get('rest_seconds', 45)
+
+    if not all_sets:
+        st.error("No sets recorded yet")
+        return
+
+    # Get the set just recorded (last set)
+    last_set = all_sets[-1]
+    reps = last_set.get('reps')
+    notes = last_set.get('notes', '')
+
+    # Show set info
+    st.success(f"**{exercise_name}**")
+    st.subheader(f"Set {current_set_number - 1} of {target_sets}")  # -1 because we already incremented
+
+    # Show set details
+    if notes:
+        st.info(f"**{reps} reps** - {notes}")
+    else:
+        st.info(f"**{reps} reps**")
+
+    st.divider()
+
+    # Check if more sets needed
+    is_last_set = current_set_number > target_sets
+
+    if is_last_set:
+        # Exercise complete
+        st.success("🎉 Exercise complete!")
+
+        st.divider()
+
+        if st.button("✅ Continue", key="abs_continue_after_last", type="primary", use_container_width=True):
+            st.session_state.log_state = 'abs_exercise_complete'
+            st.rerun()
+    else:
+        # Rest timer
+        st.subheader("⏱️ Rest Timer")
+
+        # Initialize rest timer state
+        if 'abs_rest_timer_start' not in st.session_state:
+            st.session_state.abs_rest_timer_start = time.time()
+
+        elapsed = int(time.time() - st.session_state.abs_rest_timer_start)
+        remaining = max(0, rest_seconds - elapsed)
+
+        # Show countdown
+        if remaining > 0:
+            st.metric("Time Remaining", f"{remaining}s")
+            progress = (rest_seconds - remaining) / rest_seconds
+            st.progress(progress)
+
+            # Quick rest presets
+            st.caption("Quick adjust:")
+            preset_col1, preset_col2, preset_col3 = st.columns(3)
+            with preset_col1:
+                if st.button("30s", key="abs_rest_30"):
+                    st.session_state.abs_rest_timer_start = time.time() - (rest_seconds - 30)
+                    st.rerun()
+            with preset_col2:
+                if st.button("45s", key="abs_rest_45"):
+                    st.session_state.abs_rest_timer_start = time.time() - (rest_seconds - 45)
+                    st.rerun()
+            with preset_col3:
+                if st.button("60s", key="abs_rest_60"):
+                    st.session_state.abs_rest_timer_start = time.time() - (rest_seconds - 60)
+                    st.rerun()
+
+            # Auto-advance when timer expires
+            if remaining == 0:
+                del st.session_state.abs_rest_timer_start
+                st.session_state.log_state = 'abs_active'
+                st.rerun()
+        else:
+            st.success("✅ Rest complete!")
+
+        st.divider()
+
+        # Action buttons
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("▶️ Next Set", key="abs_next_set", type="primary", use_container_width=True):
+                # Clear rest timer and go to next set
+                if 'abs_rest_timer_start' in st.session_state:
+                    del st.session_state.abs_rest_timer_start
+                st.session_state.log_state = 'abs_active'
+                st.rerun()
+
+        with col2:
+            if st.button("✅ Finish Exercise", key="abs_finish_from_preview", use_container_width=True):
+                # Move to exercise complete
+                if 'abs_rest_timer_start' in st.session_state:
+                    del st.session_state.abs_rest_timer_start
+                st.session_state.log_state = 'abs_exercise_complete'
+                st.rerun()
+
+
+def render_abs_active():
+    """Render SET recording screen for abs exercises (simplified version)."""
+    from src.ui.audio_recorder import combined_input
+    from src.agents.session_graph import add_exercise_to_session
+
+    st.title("🎙️ Record Abs Set")
+
+    session = st.session_state.workout_session
+
+    # Show overall abs progress
+    abs_accumulated = session.get('abs_accumulated_exercises', [])
+    abs_template = session.get('abs_planned_template', {})
+    total_abs_exercises = len(abs_template.get('exercises', []))
+    current_exercise_num = len(abs_accumulated) + 1
+
+    st.caption(f"💪 Abs Exercise {current_exercise_num} of {total_abs_exercises}")
+
+    # Get current abs exercise state
+    in_progress = session.get('abs_in_progress_exercise')
+    if not in_progress:
+        st.error("No abs exercise in progress!")
+        if st.button("Back"):
+            st.session_state.log_state = 'abs_exercise_intro'
+            st.rerun()
+        return
+
+    exercise_name = in_progress.get('name', 'Unknown')
+    current_set = session.get('abs_current_set_number', 1)
+    target_sets = session.get('abs_target_sets', 3)
+    target_reps = in_progress.get('target_reps', 10)
+
+    # Show exercise and set info
+    st.success(f"🎯 **{exercise_name}**")
+    st.subheader(f"Set {current_set} of {target_sets}")
+    st.info(f"**Target:** {target_reps} reps")
+
+    st.divider()
+    st.subheader("Record What You Did")
+    st.caption("Complete this set, then record your results:")
+
+    # Recording interface
+    user_input = combined_input(
+        placeholder=f"e.g., '{target_reps} reps' or '45 seconds'",
+        key=f"abs_set_input_{current_set}"
+    )
+
+    if user_input and user_input.strip():
+        with st.spinner("Recording set..."):
+            try:
+                # Parse the input using add_exercise_to_session
+                # Format as single exercise input
+                exercise_input = f"{exercise_name}: {user_input}"
+
+                # Parse using existing logic
+                result = add_exercise_to_session(session, exercise_input)
+
+                if result.get('success'):
+                    # Extract the parsed set data
+                    parsed_ex = result.get('parsed_exercise', {})
+                    sets = parsed_ex.get('sets', [])
+
+                    if sets:
+                        # Add the set(s) to in_progress_exercise
+                        in_progress['sets'].extend(sets)
+                        session['abs_in_progress_exercise'] = in_progress
+
+                        # Increment set number
+                        new_set_num = current_set + len(sets)
+                        session['abs_current_set_number'] = new_set_num
+
+                        st.session_state.workout_session = session
+
+                        # Move to set preview (rest timer)
+                        st.session_state.log_state = 'abs_set_preview'
+                        st.rerun()
+                    else:
+                        st.error("Could not parse set data. Try again.")
+                else:
+                    st.error(f"Could not parse: {result.get('error', 'Unknown error')}")
+
+            except Exception as e:
+                st.error(f"Error recording set: {str(e)}")
+
+    st.divider()
+
+    # Action buttons
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Finish exercise early
+        if current_set > 1:
+            if st.button("✅ Finish Exercise", key="abs_finish_exercise", use_container_width=True):
+                # Move to exercise complete
+                st.session_state.log_state = 'abs_exercise_complete'
+                st.rerun()
+
+    with col2:
+        if st.button("❌ Cancel Abs", key="abs_cancel_from_active", use_container_width=True):
+            st.session_state.confirm_cancel_abs = True
+            st.rerun()
+
+    # Cancel confirmation
+    if st.session_state.get('confirm_cancel_abs'):
+        st.divider()
+        st.warning("⚠️ **Cancel abs session?**")
+
+        conf_col1, conf_col2 = st.columns(2)
+        with conf_col1:
+            if st.button("Yes, Cancel", key="abs_active_cancel_yes", type="primary", use_container_width=True):
+                st.session_state.add_abs_to_workout = False
+                if 'abs_recommendation' in st.session_state:
+                    del st.session_state.abs_recommendation
+                st.session_state.confirm_cancel_abs = False
+                st.session_state.log_state = 'session_workout_review'
+                st.rerun()
+        with conf_col2:
+            if st.button("No, Continue", key="abs_active_cancel_no", use_container_width=True):
+                st.session_state.confirm_cancel_abs = False
+                st.rerun()
+
+
+def render_abs_exercise_intro():
+    """
+    Render abs exercise introduction screen before Set 1.
+
+    Shows:
+    - Exercise name prominently
+    - Plan details (sets, reps, rest, notes)
+    - Options: Start / Skip / Cancel
+    """
+    from src.agents.session_graph import generate_next_set_suggestion
+
+    st.title("💪 Abs Exercise")
+
+    session = st.session_state.workout_session
+
+    # Show progress
+    abs_accumulated = session.get('abs_accumulated_exercises', [])
+    abs_template = session.get('abs_planned_template', {})
+    total_abs_exercises = len(abs_template.get('exercises', []))
+
+    st.caption(f"Exercise {len(abs_accumulated) + 1} of {total_abs_exercises}")
+
+    st.divider()
+
+    # Get current abs exercise from template
+    current_index = session.get('abs_current_exercise_index', 0)
+    planned_exercises = abs_template.get('exercises', [])
+
+    if current_index >= len(planned_exercises):
+        # No more abs exercises
+        st.success("✅ All abs exercises complete!")
+        if st.button("Review Abs Session", type="primary"):
+            st.session_state.log_state = 'abs_workout_review'
+            st.rerun()
+        return
+
+    exercise = planned_exercises[current_index]
+    exercise_name = exercise.get('name', 'Unknown')
+    target_sets = exercise.get('target_sets', 3)
+    target_reps = exercise.get('target_reps', 10)
+    rest_seconds = exercise.get('rest_seconds', 45)
+    notes = exercise.get('notes', '')
+
+    # Large exercise name display
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+        margin: 20px 0;
+    ">
+        <h1 style="color: white; margin: 0; font-size: 2.5em;">
+            {exercise_name}
+        </h1>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Exercise notes/form tips
+    if notes:
+        st.info(f"💡 **Form Tip:** {notes}")
+
+    st.divider()
+
+    # Plan summary
+    st.subheader("📋 Plan")
+
+    plan_col1, plan_col2 = st.columns(2)
+
+    with plan_col1:
+        st.metric("Sets", f"{target_sets} sets")
+        st.metric("Reps per Set", f"{target_reps}")
+
+    with plan_col2:
+        st.metric("Rest Between Sets", f"{rest_seconds}s")
+
+    st.divider()
+
+    # Primary action: Start Exercise
+    if st.button(
+        "▶️  Start Exercise",
+        key="start_abs_exercise_btn",
+        use_container_width=True,
+        type="primary",
+        help="Begin recording Set 1"
+    ):
+        # Initialize abs exercise state
+        session['abs_in_progress_exercise'] = {
+            'name': exercise_name,
+            'sets': [],
+            'target_sets': target_sets,
+            'target_reps': target_reps,
+            'rest_seconds': rest_seconds
+        }
+        session['abs_current_set_number'] = 1
+        session['abs_target_sets'] = target_sets
+        session['abs_current_set_suggestion'] = {
+            'set_number': 1,
+            'target_reps': target_reps,
+            'rest_seconds': rest_seconds
+        }
+
+        st.session_state.workout_session = session
+        st.session_state.log_state = 'abs_active'
+        st.rerun()
+
+    st.divider()
+    st.caption("Other Options:")
+
+    # Secondary options
+    opt_col1, opt_col2 = st.columns(2)
+
+    with opt_col1:
+        if st.button("⏭️ Skip Exercise", key="abs_intro_skip_btn", use_container_width=True):
+            st.session_state.confirm_skip_abs_exercise = True
+            st.rerun()
+
+    with opt_col2:
+        if st.button("❌ Cancel Abs", key="abs_intro_cancel_btn", use_container_width=True):
+            st.session_state.confirm_cancel_abs = True
+            st.rerun()
+
+    # Show skip confirmation
+    if st.session_state.get('confirm_skip_abs_exercise'):
+        st.divider()
+        st.warning(f"⚠️ **Skip {exercise_name}?**")
+
+        skip_col1, skip_col2 = st.columns(2)
+        with skip_col1:
+            if st.button("Yes, Skip It", key="abs_confirm_skip_yes", type="primary", use_container_width=True):
+                # Move to next abs exercise
+                session['abs_current_exercise_index'] = current_index + 1
+                st.session_state.workout_session = session
+                st.session_state.confirm_skip_abs_exercise = False
+                st.rerun()
+        with skip_col2:
+            if st.button("No, Do It", key="abs_confirm_skip_no", use_container_width=True):
+                st.session_state.confirm_skip_abs_exercise = False
+                st.rerun()
+
+    # Show cancel confirmation
+    if st.session_state.get('confirm_cancel_abs'):
+        st.divider()
+        st.warning("⚠️ **Cancel abs session?**")
+        st.caption("Your main workout will still be saved.")
+
+        conf_col1, conf_col2 = st.columns(2)
+        with conf_col1:
+            if st.button("Yes, Cancel Abs", key="abs_confirm_cancel_yes", type="primary", use_container_width=True):
+                # Back to workout review without abs
+                st.session_state.add_abs_to_workout = False
+                if 'abs_recommendation' in st.session_state:
+                    del st.session_state.abs_recommendation
+                st.session_state.confirm_cancel_abs = False
+                st.session_state.log_state = 'session_workout_review'
+                st.rerun()
+        with conf_col2:
+            if st.button("No, Continue", key="abs_confirm_cancel_no", use_container_width=True):
+                st.session_state.confirm_cancel_abs = False
+                st.rerun()
+
+
+def render_abs_intro():
+    """
+    Abs introduction screen with AI template recommendation.
+
+    Shows:
+    - AI-recommended abs template with reasoning
+    - Template exercises preview
+    - Options: Start / Skip
+    """
+    st.title("💪 Add Abs Session")
+
+    session = st.session_state.workout_session
+
+    # Get abs recommendation (only call once, cache in session state)
+    if 'abs_recommendation' not in st.session_state:
+        from src.agents.abs_recommender import recommend_abs_template
+
+        with st.spinner("Getting abs recommendation..."):
+            try:
+                # Get recommendation from AI
+                recommendation = recommend_abs_template(time_available=15)
+                st.session_state.abs_recommendation = recommendation
+            except Exception as e:
+                st.error(f"Error getting recommendation: {str(e)}")
+                # Provide a fallback
+                st.session_state.abs_recommendation = {
+                    "template_id": None,
+                    "template": None,
+                    "reason": "Could not load recommendation",
+                    "modifications": []
+                }
+
+    recommendation = st.session_state.abs_recommendation
+    template = recommendation.get('template')
+
+    if not template:
+        st.error("❌ No abs templates available. Please check abs_templates.json")
+        if st.button("⬅️ Back to Workout Review"):
+            st.session_state.add_abs_to_workout = False
+            if 'abs_recommendation' in st.session_state:
+                del st.session_state.abs_recommendation
+            st.session_state.log_state = 'session_workout_review'
+            st.rerun()
+        return
+
+    # Show recommendation
+    st.success(f"**Recommended:** {template['name']}")
+    st.caption(recommendation['reason'])
+
+    st.divider()
+
+    # Show template preview
+    st.markdown("### Exercises")
+    for i, ex in enumerate(template.get('exercises', []), 1):
+        reps_display = ex.get('target_reps', '?')
+        sets_display = ex.get('target_sets', '?')
+        st.caption(f"{i}. **{ex['name']}** - {sets_display} sets × {reps_display} reps")
+        if ex.get('notes'):
+            st.caption(f"   _{ex['notes']}_")
+
+    st.caption(f"⏱️ Estimated time: ~{template.get('estimated_duration_min', 15)} minutes")
+
+    st.divider()
+
+    # Action buttons
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("✅ Start Abs Workout", type="primary", use_container_width=True):
+            # Initialize abs session state
+            session['abs_planned_template'] = template
+            session['abs_accumulated_exercises'] = []
+            session['abs_current_exercise_index'] = 0
+            session['abs_in_progress_exercise'] = None
+            session['abs_current_set_number'] = 0
+            session['abs_target_sets'] = 0
+            session['abs_current_set_suggestion'] = None
+
+            st.session_state.workout_session = session
+            st.session_state.log_state = 'abs_exercise_intro'
+            st.rerun()
+
+    with col2:
+        if st.button("⏭️ Skip Abs", use_container_width=True):
+            # Back to main workout review (without abs)
+            st.session_state.add_abs_to_workout = False
+            if 'abs_recommendation' in st.session_state:
+                del st.session_state.abs_recommendation
+            st.session_state.log_state = 'session_workout_review'
+            st.rerun()
+
+
 def render_session_workout_review():
     """Review full workout before saving."""
     from src.ui.session_components import render_workout_review
@@ -1887,15 +2532,169 @@ def render_session_workout_review():
 
     st.divider()
 
+    # Supplementary Work Section
+    st.subheader("Supplementary Work")
+
+    # Check if abs can be done today
+    from src.data import can_do_supplementary_today
+    can_do_abs = can_do_supplementary_today("abs")
+
+    # Initialize session state for abs checkbox if not exists
+    if 'add_abs_to_workout' not in st.session_state:
+        st.session_state.add_abs_to_workout = False
+
+    if can_do_abs["can_do"]:
+        add_abs = st.checkbox(
+            "Add abs to this workout",
+            value=st.session_state.add_abs_to_workout,
+            help="You can add an ab session after your main workout",
+            key="abs_checkbox"
+        )
+        st.session_state.add_abs_to_workout = add_abs
+
+        if add_abs:
+            st.info("💪 Great! Abs will be logged with this workout.")
+    else:
+        st.warning(f"⚠️ Abs not recommended today: {can_do_abs['reason']}")
+        st.caption("You can still add them if you want, but it's best to follow spacing rules.")
+
+        # Still allow checkbox but with warning
+        add_abs = st.checkbox(
+            "Add abs anyway (not recommended)",
+            value=st.session_state.add_abs_to_workout,
+            key="abs_checkbox_override"
+        )
+        st.session_state.add_abs_to_workout = add_abs
+
+    st.divider()
+
     # Save and cancel buttons
     col1, col2 = st.columns([2, 1])
 
     with col1:
         if st.button("💾 Save Workout", type="primary", use_container_width=True):
+            # Check if abs was requested
+            if st.session_state.get('add_abs_to_workout', False):
+                # START ABS WORKFLOW - transition to abs intro
+                st.session_state.log_state = 'abs_intro'
+                st.rerun()
+            else:
+                # Save main workout only (no abs)
+                try:
+                    from src.agents.session_graph import finish_session
+
+                    with st.spinner("Saving workout..."):
+                        # Finish and save session
+                        final_session = finish_session(session)
+
+                    st.session_state.workout_session = final_session
+
+                    if final_session.get('saved'):
+                        # Success - move to saved state
+                        st.session_state.log_workflow_state = {
+                            'workout_id': final_session.get('workout_id'),
+                            'saved': True
+                        }
+                        st.session_state.log_state = 'saved'
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {final_session.get('response', 'Failed to save')}")
+
+                except Exception as e:
+                    st.error(f"❌ Error saving workout: {str(e)}")
+
+    with col2:
+        if st.button("❌ Cancel", use_container_width=True):
+            from src.ui.session import reset_workout_session
+            reset_workout_session()
+            # Navigate to home instead of staying on this page
+            st.switch_page("app.py")
+
+
+def render_abs_workout_review():
+    """
+    Review all abs exercises before saving with main workout.
+
+    Shows:
+    - All abs exercises completed with sets
+    - Optional abs notes field
+    - Actions: Save Main + Abs / Discard Abs
+    """
+    st.title("🎯 Abs Session Review")
+
+    session = st.session_state.workout_session
+    abs_exercises = session.get('abs_accumulated_exercises', [])
+
+    if not abs_exercises:
+        st.warning("⚠️ No abs exercises recorded")
+        if st.button("⬅️ Back to Main Review"):
+            st.session_state.log_state = 'session_workout_review'
+            st.rerun()
+        return
+
+    # Show abs exercises summary
+    st.subheader(f"✅ Completed {len(abs_exercises)} Exercise{'s' if len(abs_exercises) != 1 else ''}")
+
+    st.divider()
+
+    # Show each exercise with sets
+    for i, ex in enumerate(abs_exercises, 1):
+        ex_name = ex.get('name', 'Unknown')
+        sets = ex.get('sets', [])
+
+        with st.expander(f"**{i}. {ex_name}** - {len(sets)} sets", expanded=True):
+            for j, set_data in enumerate(sets, 1):
+                reps = set_data.get('reps')
+                weight = set_data.get('weight_lbs')
+                notes = set_data.get('notes', '')
+
+                if weight:
+                    st.caption(f"Set {j}: {reps} reps @ {weight:.0f} lbs {notes}")
+                else:
+                    if notes:
+                        st.caption(f"Set {j}: {reps} reps - {notes}")
+                    else:
+                        st.caption(f"Set {j}: {reps} reps")
+
+    st.divider()
+
+    # Optional notes for entire abs session
+    abs_notes = st.text_area(
+        "Abs Session Notes (optional)",
+        placeholder="How did the abs session feel?",
+        key="abs_session_notes_input"
+    )
+
+    st.divider()
+
+    # Action buttons
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        if st.button("💾 Save Main Workout + Abs", type="primary", use_container_width=True):
             try:
                 from src.agents.session_graph import finish_session
 
-                with st.spinner("Saving workout..."):
+                # Package abs data into supplementary_work format
+                abs_template = session.get('abs_planned_template', {})
+                abs_work = {
+                    "type": "abs",
+                    "template_id": abs_template.get('id'),
+                    "exercises": [
+                        {
+                            "name": ex.get('name'),
+                            "sets": ex.get('sets', []),
+                            "notes": None
+                        }
+                        for ex in abs_exercises
+                    ],
+                    "notes": abs_notes if abs_notes else None
+                }
+
+                # Add to session
+                session['supplementary_work'] = [abs_work]
+
+                with st.spinner("Saving workout with abs..."):
                     # Finish and save session
                     final_session = finish_session(session)
 
@@ -1908,6 +2707,13 @@ def render_session_workout_review():
                         'saved': True
                     }
                     st.session_state.log_state = 'saved'
+
+                    # Clean up abs state
+                    if 'abs_recommendation' in st.session_state:
+                        del st.session_state.abs_recommendation
+                    if 'abs_rest_timer_start' in st.session_state:
+                        del st.session_state.abs_rest_timer_start
+
                     st.rerun()
                 else:
                     st.error(f"❌ {final_session.get('response', 'Failed to save')}")
@@ -1916,11 +2722,31 @@ def render_session_workout_review():
                 st.error(f"❌ Error saving workout: {str(e)}")
 
     with col2:
-        if st.button("❌ Cancel", use_container_width=True):
-            from src.ui.session import reset_workout_session
-            reset_workout_session()
-            # Navigate to home instead of staying on this page
-            st.switch_page("app.py")
+        if st.button("❌ Discard Abs", use_container_width=True):
+            # Confirmation dialog
+            if st.session_state.get('confirm_discard_abs_review'):
+                # Actually discard
+                session['abs_accumulated_exercises'] = []
+                session['abs_planned_template'] = None
+                st.session_state.add_abs_to_workout = False
+                st.session_state.workout_session = session
+                st.session_state.log_state = 'session_workout_review'
+                st.session_state.confirm_discard_abs_review = False
+
+                # Clean up
+                if 'abs_recommendation' in st.session_state:
+                    del st.session_state.abs_recommendation
+
+                st.rerun()
+            else:
+                st.session_state.confirm_discard_abs_review = True
+                st.rerun()
+
+    # Show discard confirmation warning
+    if st.session_state.get('confirm_discard_abs_review'):
+        st.divider()
+        st.warning("⚠️ **Discard abs session?**")
+        st.caption("Your main workout will still be saved. Click 'Discard Abs' again to confirm.")
 
 
 # ============================================================================
@@ -1938,6 +2764,35 @@ elif st.session_state.log_state == 'saved':
     st.balloons()
     st.success("✅ Workout Saved!")
     st.title("Great job! 💪")
+
+    # Show abs summary if abs were included
+    session = st.session_state.workout_session
+    if session:
+        supp_work = session.get('supplementary_work', [])
+        if supp_work:
+            # Check if abs were done (could be old or new format)
+            abs_data = None
+            if isinstance(supp_work[0], dict):
+                # New format
+                for work in supp_work:
+                    if work.get('type') == 'abs':
+                        abs_data = work
+                        break
+            elif isinstance(supp_work[0], str) and 'abs' in supp_work:
+                # Old format (just a flag)
+                abs_data = {'type': 'abs', 'exercises': []}
+
+            if abs_data:
+                st.divider()
+                abs_exercises = abs_data.get('exercises', [])
+                if abs_exercises:
+                    st.success(f"🎯 **Plus {len(abs_exercises)} abs exercise{'s' if len(abs_exercises) != 1 else ''}!**")
+                    total_abs_sets = sum(len(ex.get('sets', [])) for ex in abs_exercises)
+                    st.caption(f"Total abs sets: {total_abs_sets}")
+                else:
+                    st.success("🎯 **Plus abs!**")
+
+    st.divider()
 
     # NEW: Check if still in catch-up mode
     from src.tools.recommend_tools import get_weekly_split_status
@@ -2017,6 +2872,24 @@ elif st.session_state.log_state == 'session_exercise_preview':
 elif st.session_state.log_state == 'session_workout_review':
     print(f"🔴 STATE ROUTER: session_workout_review")
     render_session_workout_review()
+elif st.session_state.log_state == 'abs_intro':
+    print(f"🔴 STATE ROUTER: abs_intro")
+    render_abs_intro()
+elif st.session_state.log_state == 'abs_exercise_intro':
+    print(f"🔴 STATE ROUTER: abs_exercise_intro")
+    render_abs_exercise_intro()
+elif st.session_state.log_state == 'abs_active':
+    print(f"🔴 STATE ROUTER: abs_active")
+    render_abs_active()
+elif st.session_state.log_state == 'abs_set_preview':
+    print(f"🔴 STATE ROUTER: abs_set_preview")
+    render_abs_set_preview()
+elif st.session_state.log_state == 'abs_exercise_complete':
+    print(f"🔴 STATE ROUTER: abs_exercise_complete")
+    render_abs_exercise_complete()
+elif st.session_state.log_state == 'abs_workout_review':
+    print(f"🔴 STATE ROUTER: abs_workout_review")
+    render_abs_workout_review()
 else:
     print(f"🔴 STATE ROUTER: Unknown state '{st.session_state.log_state}' - resetting to planning_chat")
     # Fallback - reset to planning chat

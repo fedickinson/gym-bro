@@ -98,6 +98,24 @@ def init_session_state():
         st.session_state.expanded_log_id = None
 
     # ========================================================================
+    # Delete Confirmation Dialogs
+    # ========================================================================
+    if 'show_delete_dialog' not in st.session_state:
+        st.session_state.show_delete_dialog = False
+
+    if 'delete_target_id' not in st.session_state:
+        st.session_state.delete_target_id = None
+
+    if 'show_bulk_delete_dialog' not in st.session_state:
+        st.session_state.show_bulk_delete_dialog = False
+
+    if 'bulk_delete_ids' not in st.session_state:
+        st.session_state.bulk_delete_ids = []
+
+    if 'selected_workout_ids' not in st.session_state:
+        st.session_state.selected_workout_ids = set()
+
+    # ========================================================================
     # Progress Page State
     # ========================================================================
     if 'selected_exercise' not in st.session_state:

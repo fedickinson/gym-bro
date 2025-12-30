@@ -13,7 +13,9 @@ from src.data import (
     get_template,
     get_all_templates,
     get_weekly_split,
-    update_weekly_split
+    update_weekly_split,
+    get_supplementary_status,
+    can_do_supplementary_today
 )
 
 
@@ -81,7 +83,10 @@ def get_weekly_split_status() -> dict:
             break
     
     days_left = (week_end - today).days + 1
-    
+
+    # Add supplementary work status
+    abs_status = get_supplementary_status("abs")
+
     return {
         "week_start": week_start.isoformat(),
         "completed": completed,
@@ -89,7 +94,14 @@ def get_weekly_split_status() -> dict:
         "remaining": remaining,
         "next_suggested": next_suggested,
         "days_left_in_week": days_left,
-        "summary": _generate_split_summary(completed, targets, remaining)
+        "summary": _generate_split_summary(completed, targets, remaining),
+        "supplementary": {
+            "abs": {
+                "count": abs_status["count"],
+                "target": abs_status["target"],
+                "on_track": abs_status["on_track"]
+            }
+        }
     }
 
 
@@ -347,6 +359,48 @@ def get_workout_template(workout_type: str, adaptive: bool = True) -> dict:
     }
 
 
+@tool
+def get_abs_status() -> dict:
+    """
+    Get current week's ab workout completion status.
+
+    Returns status including count, target, dates, and whether abs can be done today.
+    Useful for making recommendations about when to include abs.
+
+    Returns:
+        dict: {
+            "count": int,           # Number of ab sessions this week
+            "target": int,          # Weekly target (usually 2)
+            "dates": list[str],     # Dates abs were completed
+            "can_do_today": bool,   # Whether abs can be done today (spacing check)
+            "days_since_last": int, # Days since last ab session
+            "on_track": bool,       # Whether weekly target is being met
+            "behind": bool          # Whether behind on weekly target
+        }
+    """
+    status = get_supplementary_status("abs")
+    can_do = can_do_supplementary_today("abs", date.today())
+
+    # Calculate days since last ab session
+    last_dates = status["dates"]
+    if last_dates:
+        last_date = date.fromisoformat(max(last_dates))
+        days_since = (date.today() - last_date).days
+    else:
+        days_since = 999  # No previous sessions
+
+    return {
+        "count": status["count"],
+        "target": status["target"],
+        "dates": status["dates"],
+        "can_do_today": can_do["can_do"],
+        "spacing_reason": can_do["reason"],
+        "days_since_last": days_since,
+        "on_track": status["on_track"],
+        "behind": status["count"] < status["target"]
+    }
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -371,5 +425,6 @@ RECOMMEND_TOOLS = [
     suggest_next_workout,
     get_last_workout_by_type,
     check_muscle_balance,
-    get_workout_template
+    get_workout_template,
+    get_abs_status
 ]

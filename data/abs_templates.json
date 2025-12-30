@@ -1,0 +1,192 @@
+{
+  "templates": [
+    {
+      "id": "abs_quick_burnout",
+      "name": "Quick Ab Burnout",
+      "type": "abs",
+      "category": "endurance",
+      "exercises": [
+        {
+          "name": "Crunches",
+          "target_sets": 3,
+          "target_reps": 20,
+          "rest_seconds": 30,
+          "notes": "Control the movement, exhale at the top"
+        },
+        {
+          "name": "Russian Twists",
+          "target_sets": 3,
+          "target_reps": 30,
+          "rest_seconds": 30,
+          "notes": "Touch floor on each side, keep feet elevated"
+        },
+        {
+          "name": "Leg Raises",
+          "target_sets": 3,
+          "target_reps": 15,
+          "rest_seconds": 45,
+          "notes": "Keep lower back pressed to floor"
+        }
+      ],
+      "estimated_duration_min": 10,
+      "difficulty": "beginner",
+      "notes": "Quick high-volume circuit for abs endurance"
+    },
+    {
+      "id": "abs_core_strength",
+      "name": "Core Strength Focus",
+      "type": "abs",
+      "category": "strength",
+      "exercises": [
+        {
+          "name": "Plank",
+          "target_sets": 3,
+          "target_reps": "45-60s",
+          "rest_seconds": 60,
+          "notes": "Hold steady position, engage core, don't let hips sag"
+        },
+        {
+          "name": "Dead Bug",
+          "target_sets": 3,
+          "target_reps": "12-15",
+          "rest_seconds": 45,
+          "notes": "Controlled movement, keep lower back pressed down"
+        },
+        {
+          "name": "Pallof Press",
+          "target_sets": 3,
+          "target_reps": 10,
+          "rest_seconds": 60,
+          "notes": "Anti-rotation core work, resist the pull"
+        },
+        {
+          "name": "Bird Dog",
+          "target_sets": 3,
+          "target_reps": "10 each side",
+          "rest_seconds": 45,
+          "notes": "Focus on stability and balance"
+        }
+      ],
+      "estimated_duration_min": 15,
+      "difficulty": "intermediate",
+      "notes": "Functional core strength with anti-rotation work"
+    },
+    {
+      "id": "abs_weighted",
+      "name": "Weighted Abs (Advanced)",
+      "type": "abs",
+      "category": "strength",
+      "exercises": [
+        {
+          "name": "Cable Crunch",
+          "target_sets": 4,
+          "target_reps": "12-15",
+          "rest_seconds": 60,
+          "notes": "Focus on ab contraction, not weight. Pull with abs, not arms"
+        },
+        {
+          "name": "Weighted Russian Twist",
+          "target_sets": 3,
+          "target_reps": 20,
+          "rest_seconds": 45,
+          "notes": "Hold plate or dumbbell, controlled rotation"
+        },
+        {
+          "name": "Hanging Leg Raise",
+          "target_sets": 3,
+          "target_reps": "10-12",
+          "rest_seconds": 60,
+          "notes": "Controlled leg lift, avoid swinging"
+        },
+        {
+          "name": "Ab Wheel Rollout",
+          "target_sets": 3,
+          "target_reps": 10,
+          "rest_seconds": 90,
+          "notes": "Advanced movement, keep core tight throughout"
+        }
+      ],
+      "estimated_duration_min": 18,
+      "difficulty": "advanced",
+      "notes": "Progressive overload for ab development"
+    },
+    {
+      "id": "abs_stability",
+      "name": "Core Stability & Anti-Rotation",
+      "type": "abs",
+      "category": "stability",
+      "exercises": [
+        {
+          "name": "Side Plank",
+          "target_sets": 3,
+          "target_reps": "30-45s each side",
+          "rest_seconds": 45,
+          "notes": "Stack feet, keep body in straight line"
+        },
+        {
+          "name": "Pallof Press",
+          "target_sets": 3,
+          "target_reps": "12 each side",
+          "rest_seconds": 60,
+          "notes": "Press away from anchor, resist rotation"
+        },
+        {
+          "name": "Copenhagen Plank",
+          "target_sets": 3,
+          "target_reps": "20-30s each side",
+          "rest_seconds": 60,
+          "notes": "Advanced adductor and core work"
+        },
+        {
+          "name": "Dead Bug",
+          "target_sets": 3,
+          "target_reps": 15,
+          "rest_seconds": 45,
+          "notes": "Opposite arm and leg, maintain lower back contact"
+        }
+      ],
+      "estimated_duration_min": 16,
+      "difficulty": "intermediate",
+      "notes": "Focus on stability and preventing unwanted movement"
+    },
+    {
+      "id": "abs_endurance",
+      "name": "Ab Endurance Circuit",
+      "type": "abs",
+      "category": "endurance",
+      "exercises": [
+        {
+          "name": "Bicycle Crunches",
+          "target_sets": 4,
+          "target_reps": 30,
+          "rest_seconds": 30,
+          "notes": "Controlled rotation, bring elbow to opposite knee"
+        },
+        {
+          "name": "Mountain Climbers",
+          "target_sets": 3,
+          "target_reps": 40,
+          "rest_seconds": 45,
+          "notes": "Quick alternating knees, maintain plank position"
+        },
+        {
+          "name": "Flutter Kicks",
+          "target_sets": 3,
+          "target_reps": "40-50",
+          "rest_seconds": 30,
+          "notes": "Small kicks, keep lower back down"
+        },
+        {
+          "name": "Plank",
+          "target_sets": 2,
+          "target_reps": "60s",
+          "rest_seconds": 60,
+          "notes": "Hold for max time, maintain form"
+        }
+      ],
+      "estimated_duration_min": 14,
+      "difficulty": "beginner",
+      "notes": "Higher volume circuit for building ab endurance"
+    }
+  ]
+}
