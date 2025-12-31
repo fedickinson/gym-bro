@@ -19,6 +19,7 @@ from src.ui.navigation import render_bottom_nav
 from src.ui.audio_recorder import combined_input
 from src.agents.log_graph import start_workout_log, continue_workout_log
 from src.tools.recommend_tools import suggest_next_workout, get_workout_template
+from src.ui.styles import get_global_styles
 
 # ============================================================================
 # Page Configuration
@@ -102,30 +103,8 @@ with st.sidebar:
     st.divider()
     st.caption("Version 1.0.0")
 
-# Desktop optimizations
-st.markdown("""
-<style>
-@media (min-width: 769px) {
-    /* Hide bottom nav on desktop */
-    .bottom-nav {
-        display: none !important;
-    }
-
-    /* Better spacing */
-    .main .block-container {
-        padding: 2rem 2rem !important;
-        max-width: 1000px !important;
-    }
-}
-
-@media (max-width: 768px) {
-    /* Mobile padding with space for bottom nav */
-    .main .block-container {
-        padding: 1rem 1rem 5rem 1rem !important;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
+# Apply global design system styles
+st.markdown(get_global_styles(), unsafe_allow_html=True)
 
 # ============================================================================
 # State Machine Functions
@@ -476,22 +455,16 @@ def render_session_exercise_intro():
     # Get exercise information from catalog
     exercise_info = get_exercise_info(exercise_name)
 
-    # Large exercise name display
+    # Large exercise name display (using green theme)
     st.markdown(f"""
-    <div style="
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 30px;
-        border-radius: 10px;
-        text-align: center;
-        margin: 20px 0;
-    ">
-        <h1 style="color: white; margin: 0; font-size: 2.5em;">
+    <div class="exercise-banner">
+        <div class="exercise-name">
             {exercise_info.get('canonical_name', exercise_name)}
-        </h1>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Exercise information (muscle groups, equipment, category)
+    # Exercise information (muscle groups, equipment, category) - Phase 2: larger text
     if exercise_info.get('found_in_catalog'):
         st.markdown("### 🎯 Exercise Details")
 
@@ -500,21 +473,21 @@ def render_session_exercise_intro():
         with info_col1:
             muscle_groups = exercise_info.get('muscle_groups', [])
             if muscle_groups:
-                st.caption("**Targets:**")
+                st.markdown("**Targets:**")
                 for muscle in muscle_groups:
-                    st.caption(f"• {muscle}")
+                    st.markdown(f"• {muscle}")
 
         with info_col2:
             equipment = exercise_info.get('equipment', [])
             category = exercise_info.get('category', '').title()
 
             if equipment:
-                st.caption("**Equipment:**")
-                st.caption(", ".join(equipment))
+                st.markdown("**Equipment:**")
+                st.markdown(", ".join(equipment))
 
             if category:
-                st.caption("**Type:**")
-                st.caption(f"{category}")
+                st.markdown("**Type:**")
+                st.markdown(f"{category}")
 
         # First-time beginner guidance
         if exercise_info.get('is_first_time'):
@@ -713,17 +686,17 @@ def render_session_active_state():
             # Show set header
             st.success(f"🎯 **{exercise_name}**")
 
-            # Show set number prominently
+            # Show set number prominently (LARGE for gym visibility)
             if target_sets > 0:
-                st.subheader(f"Set {set_number} of {target_sets}")
+                st.markdown(f'<div class="set-number-display">SET {set_number} OF {target_sets}</div>', unsafe_allow_html=True)
             else:
-                st.subheader(f"Set {set_number}")
+                st.markdown(f'<div class="set-number-display">SET {set_number}</div>', unsafe_allow_html=True)
 
-            # Show target for this specific set
+            # Show target for this specific set - Phase 2: larger, more prominent
             if suggested_weight:
-                st.info(f"**Target:** {target_reps} reps @ {suggested_weight:.0f} lbs")
+                st.markdown(f'<div class="set-target">Target: {target_reps} reps @ {suggested_weight:.0f} lbs</div>', unsafe_allow_html=True)
             else:
-                st.info(f"**Target:** {target_reps} reps (choose your weight)")
+                st.markdown(f'<div class="set-target">Target: {target_reps} reps (choose your weight)</div>', unsafe_allow_html=True)
 
             st.caption(f"Rest after: {rest_seconds} seconds")
 
@@ -1180,10 +1153,11 @@ def render_session_set_preview():
     # Show set info
     st.success(f"**{exercise_name}**")
 
+    # Show set number prominently (LARGE for gym visibility)
     if target_sets > 0:
-        st.subheader(f"Set {current_set_number} of {target_sets}")
+        st.markdown(f'<div class="set-number-display">SET {current_set_number} OF {target_sets}</div>', unsafe_allow_html=True)
     else:
-        st.subheader(f"Set {current_set_number}")
+        st.markdown(f'<div class="set-number-display">SET {current_set_number}</div>', unsafe_allow_html=True)
 
     # Show set details
     if weight:
@@ -1273,14 +1247,18 @@ def render_session_set_preview():
         elapsed = time.time() - st.session_state.rest_start_time
         remaining = max(0, st.session_state.rest_duration - elapsed)
 
-        # Show countdown
+        # Show countdown (VERY LARGE for quick glancing)
         mins = int(remaining // 60)
         secs = int(remaining % 60)
-        st.markdown(f"## ⏱️ {mins}:{secs:02d}")
+        st.markdown(f'<div class="rest-timer-display">⏱️ {mins}:{secs:02d}</div>', unsafe_allow_html=True)
 
         # Progress bar
         progress = 1.0 - (remaining / st.session_state.rest_duration) if st.session_state.rest_duration > 0 else 1.0
-        st.progress(progress)
+        st.markdown(f'''
+        <div class="rest-progress-bar">
+            <div class="rest-progress-fill" style="width: {progress * 100}%"></div>
+        </div>
+        ''', unsafe_allow_html=True)
 
         # Quick adjust buttons
         col1, col2, col3, col4 = st.columns(4)
@@ -1375,7 +1353,8 @@ def render_session_exercise_complete():
         print(f"   Sets completed: {len(session.get('in_progress_exercise', {}).get('sets', []))}")
         print(f"   Current index: {session.get('current_exercise_index')}")
 
-    st.title("🎉 Exercise Complete!")
+    # Phase 2: Large, prominent text for exercise details
+    st.markdown('<div class="exercise-complete-banner">🎉 EXERCISE COMPLETE</div>', unsafe_allow_html=True)
 
     if not session:
         st.error("No session found")
@@ -1392,18 +1371,21 @@ def render_session_exercise_complete():
     exercise_name = in_progress.get('name', 'Unknown')
     all_sets = in_progress.get('sets', [])
 
-    # Show exercise summary
-    st.success(f"**{exercise_name}** - {len(all_sets)} sets")
+    # Show exercise summary with larger text
+    st.markdown(f'<div class="exercise-title">{exercise_name}</div>', unsafe_allow_html=True)
+    st.caption(f"{len(all_sets)} sets completed")
 
-    # List all sets
+    st.divider()
+
+    # List all sets with larger text
     for i, set_data in enumerate(all_sets, 1):
         weight = set_data.get('weight_lbs')
         reps = set_data.get('reps')
 
         if weight:
-            st.caption(f"Set {i}: {reps} reps @ {weight:.0f} lbs")
+            st.markdown(f'<div class="set-detail">Set {i}: {reps} reps @ {weight:.0f} lbs</div>', unsafe_allow_html=True)
         else:
-            st.caption(f"Set {i}: {reps} reps (bodyweight)")
+            st.markdown(f'<div class="set-detail">Set {i}: {reps} reps (bodyweight)</div>', unsafe_allow_html=True)
 
     # Calculate total volume
     total_volume = sum(
@@ -1412,7 +1394,8 @@ def render_session_exercise_complete():
     )
 
     if total_volume > 0:
-        st.info(f"**Total Volume:** {total_volume:,.0f} lbs")
+        st.divider()
+        st.markdown(f'<div class="stat-highlight">Total Volume: {total_volume:,.0f} lbs</div>', unsafe_allow_html=True)
 
     st.divider()
 
@@ -2637,24 +2620,35 @@ def render_abs_workout_review():
 
     st.divider()
 
-    # Show each exercise with sets
+    # Show each exercise with sets - Phase 2: larger text
     for i, ex in enumerate(abs_exercises, 1):
         ex_name = ex.get('name', 'Unknown')
         sets = ex.get('sets', [])
 
-        with st.expander(f"**{i}. {ex_name}** - {len(sets)} sets", expanded=True):
-            for j, set_data in enumerate(sets, 1):
-                reps = set_data.get('reps')
-                weight = set_data.get('weight_lbs')
-                notes = set_data.get('notes', '')
+        # Exercise name - large and prominent
+        st.markdown(f'<div class="exercise-title">{i}. {ex_name}</div>', unsafe_allow_html=True)
+        st.caption(f"{len(sets)} sets")
 
-                if weight:
-                    st.caption(f"Set {j}: {reps} reps @ {weight:.0f} lbs {notes}")
+        # Show sets with larger text
+        for j, set_data in enumerate(sets, 1):
+            reps = set_data.get('reps')
+            weight = set_data.get('weight_lbs')
+            notes = set_data.get('notes', '')
+
+            if weight:
+                st.markdown(f'<div class="set-detail">Set {j}: {reps} reps @ {weight:.0f} lbs {notes}</div>', unsafe_allow_html=True)
+            else:
+                if notes:
+                    st.markdown(f'<div class="set-detail">Set {j}: {reps} reps - {notes}</div>', unsafe_allow_html=True)
                 else:
-                    if notes:
-                        st.caption(f"Set {j}: {reps} reps - {notes}")
-                    else:
-                        st.caption(f"Set {j}: {reps} reps")
+                    st.markdown(f'<div class="set-detail">Set {j}: {reps} reps</div>', unsafe_allow_html=True)
+
+        # Calculate and show volume
+        volume = sum(s.get('reps', 0) * s.get('weight_lbs', 0) for s in sets)
+        if volume > 0:
+            st.markdown(f'<div class="stat-highlight">Volume: {volume:,.0f} lbs</div>', unsafe_allow_html=True)
+
+        st.divider()
 
     st.divider()
 

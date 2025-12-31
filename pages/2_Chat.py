@@ -7,6 +7,7 @@ Routes questions to Query Agent, Recommend Agent, or Chat Chain based on intent.
 import streamlit as st
 from src.ui.session import init_session_state, add_chat_message, clear_chat_history, get_orchestrator
 from src.ui.navigation import render_bottom_nav
+from src.ui.styles import get_global_styles
 
 # ============================================================================
 # Page Configuration
@@ -25,30 +26,8 @@ init_session_state()
 st.session_state.current_page = 'Chat'
 render_bottom_nav('Chat')
 
-# Desktop optimizations
-st.markdown("""
-<style>
-@media (min-width: 769px) {
-    /* Hide bottom nav on desktop */
-    .bottom-nav {
-        display: none !important;
-    }
-
-    /* Better spacing */
-    .main .block-container {
-        padding: 2rem 2rem !important;
-        max-width: 1000px !important;
-    }
-}
-
-@media (max-width: 768px) {
-    /* Mobile padding with space for bottom nav */
-    .main .block-container {
-        padding: 1rem 1rem 5rem 1rem !important;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
+# Apply global design system styles
+st.markdown(get_global_styles(), unsafe_allow_html=True)
 
 # ============================================================================
 # Page Content

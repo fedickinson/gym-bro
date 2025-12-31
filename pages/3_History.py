@@ -10,6 +10,7 @@ from src.ui.session import init_session_state
 from src.ui.navigation import render_bottom_nav
 from src.ui.confirmation_dialogs import show_delete_confirmation, show_bulk_delete_confirmation
 from src.data import get_all_logs, get_logs_by_date_range
+from src.ui.styles import get_global_styles
 
 # Page configuration
 st.set_page_config(
@@ -25,29 +26,12 @@ init_session_state()
 st.session_state.current_page = 'History'
 render_bottom_nav('History')
 
-# Desktop optimizations
+# Apply global design system styles
+st.markdown(get_global_styles(), unsafe_allow_html=True)
+
+# Page-specific styles
 st.markdown("""
 <style>
-@media (min-width: 769px) {
-    /* Hide bottom nav on desktop */
-    .bottom-nav {
-        display: none !important;
-    }
-
-    /* Better spacing */
-    .main .block-container {
-        padding: 2rem 2rem !important;
-        max-width: 1000px !important;
-    }
-}
-
-@media (max-width: 768px) {
-    /* Mobile padding with space for bottom nav */
-    .main .block-container {
-        padding: 1rem 1rem 5rem 1rem !important;
-    }
-}
-
 /* Red delete buttons */
 button[kind="secondary"]:has(p:contains("Delete")),
 button[kind="secondary"]:has(p:contains("🗑️")),
