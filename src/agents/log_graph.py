@@ -133,6 +133,8 @@ def parse_notes(state: LogWorkoutState) -> LogWorkoutState:
     print("\n🔍 Parsing workout notes...")
 
     # Set up LLM and parser
+    # Note: Tested Haiku (47% accuracy) - too many JSON formatting issues
+    # Keeping Sonnet for reliable parsing
     llm = ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0)
     parser = PydanticOutputParser(pydantic_object=ParsedWorkout)
 
@@ -304,6 +306,12 @@ def route_after_confirmation(state: LogWorkoutState) -> str:
         if state.get("edit_instructions"):
             # Append edit instructions to raw notes
             state["raw_notes"] += f"\n\nCorrection: {state['edit_instructions']}"
+
+            # CRITICAL: Reset user_choice and edit_instructions to break the loop
+            # Otherwise it will keep routing back to parse infinitely
+            state["user_choice"] = None
+            state["edit_instructions"] = None
+
         return "parse"
     else:  # cancel
         return "cancel"

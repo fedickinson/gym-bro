@@ -1,1 +1,2 @@
 Date,Conversation_ID,Category,Subcategory,Root_Cause,Status,PR_Link,Notes
+2025-12-22,example_wrong_workout_suggestion,Agent,Recommend,Prompt missing explicit tool-calling instruction,Fixed,N/A,Agent suggested Push after user already did Push - Fixed by adding CRITICAL instruction to always check weekly_split_status first

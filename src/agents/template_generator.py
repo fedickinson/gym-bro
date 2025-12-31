@@ -51,7 +51,10 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
     patterns = analyze_exercise_patterns(workout_type, days=0)
     volume = analyze_volume_tolerance(workout_type, days=0)
 
-    # 3. Build exercise list (prioritize common exercises)
+    # Check if user has sufficient history to personalize
+    has_history = patterns.get('total_workouts', 0) >= 3  # Need at least 3 workouts to personalize
+
+    # 3. Build exercise list (prioritize common exercises if history exists)
     adapted_exercises = []
     removed_exercises = []
 
@@ -61,33 +64,44 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
         if not exercise_name:
             continue
 
-        # Check if user does this exercise
-        frequency = _get_exercise_frequency(exercise_name, patterns)
+        # Only filter by frequency if user has history
+        if has_history:
+            frequency = _get_exercise_frequency(exercise_name, patterns)
 
-        if frequency < 0.3:  # Skip rarely done exercises
-            removed_exercises.append(exercise_name)
-            continue
+            if frequency < 0.3:  # Skip rarely done exercises
+                removed_exercises.append(exercise_name)
+                continue
 
-        # Get progression status
-        progression = analyze_progression_velocity(exercise_name, days=0)
-        history = get_exercise_history(exercise_name, days=0)  # All-time history
+        # Get progression status (only if user has history)
+        if has_history:
+            progression = analyze_progression_velocity(exercise_name, days=0)
+            history = get_exercise_history(exercise_name, days=0)  # All-time history
 
-        # Determine suggested weight
-        if history and len(history) > 0:
-            last_weight = history[-1]["max_weight"]
+            # Determine suggested weight
+            if history and len(history) > 0:
+                last_weight = history[-1]["max_weight"]
 
-            if progression["suggested_action"] == "increase":
-                suggested_weight = last_weight + max(2.5, progression["avg_weekly_increase"])
-            elif progression["suggested_action"] == "deload":
-                suggested_weight = last_weight * 0.9  # 10% deload
+                if progression["suggested_action"] == "increase":
+                    suggested_weight = last_weight + max(2.5, progression["avg_weekly_increase"])
+                elif progression["suggested_action"] == "deload":
+                    suggested_weight = last_weight * 0.9  # 10% deload
+                else:
+                    suggested_weight = last_weight  # maintain
             else:
-                suggested_weight = last_weight  # maintain
-        else:
-            suggested_weight = None  # No history yet
+                # No history for this exercise yet - use beginner weight
+                from src.agents.suggestion_engine import _get_beginner_weight
+                suggested_weight, _ = _get_beginner_weight(exercise_name)
 
-        # Determine sets/reps (use user's typical or template default)
-        user_avg_sets = _get_avg_sets_for_exercise(exercise_name, patterns)
-        target_sets = int(user_avg_sets) if user_avg_sets else exercise.get("target_sets", 4)
+            # Determine sets/reps (use user's typical or template default)
+            user_avg_sets = _get_avg_sets_for_exercise(exercise_name, patterns)
+            target_sets = int(user_avg_sets) if user_avg_sets else exercise.get("target_sets", 4)
+            reasoning = _build_reasoning(exercise_name, progression, history)
+        else:
+            # No history - use beginner weight from catalog
+            from src.agents.suggestion_engine import _get_beginner_weight
+            suggested_weight, beginner_reasoning = _get_beginner_weight(exercise_name)
+            target_sets = exercise.get("target_sets", 4)
+            reasoning = beginner_reasoning
 
         # Build adapted exercise
         adapted_exercises.append({
@@ -96,44 +110,51 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
             "target_sets": target_sets,
             "target_reps": exercise.get("target_reps", "8-10"),
             "rest_seconds": exercise.get("rest_seconds", 90),
-            "reasoning": _build_reasoning(exercise_name, progression, history)
+            "reasoning": reasoning
         })
 
-    # 4. Build coaching notes
+    # 4. Build coaching notes (only for users with history)
     coaching_notes = []
 
-    if volume["volume_trend"] == "increasing":
-        pct_increase = ((volume["recent_avg_sets"] - volume["older_avg_sets"]) /
-                       volume["older_avg_sets"] * 100) if volume["older_avg_sets"] > 0 else 0
-        if pct_increase > 15:
-            coaching_notes.append(
-                f"⚠️ Volume has increased {pct_increase:.0f}% over time. "
-                "Consider a deload if feeling fatigued."
-            )
+    if has_history:
+        if volume["volume_trend"] == "increasing":
+            pct_increase = ((volume["recent_avg_sets"] - volume["older_avg_sets"]) /
+                           volume["older_avg_sets"] * 100) if volume["older_avg_sets"] > 0 else 0
+            if pct_increase > 15:
+                coaching_notes.append(
+                    f"⚠️ Volume has increased {pct_increase:.0f}% over time. "
+                    "Consider a deload if feeling fatigued."
+                )
 
-    if volume["volume_trend"] == "decreasing":
-        coaching_notes.append(
-            "📉 Volume has decreased recently. Consider increasing if recovering well."
-        )
+        if volume["volume_trend"] == "decreasing":
+            coaching_notes.append(
+                "📉 Volume has decreased recently. Consider increasing if recovering well."
+            )
 
     # 5. Build adaptations summary
     adaptations = []
 
-    if removed_exercises:
-        adaptations.append(
-            f"Removed {len(removed_exercises)} rarely-done exercises"
-        )
-
-    if len(adapted_exercises) > 0:
-        weights_adjusted = sum(1 for ex in adapted_exercises if ex.get("suggested_weight_lbs"))
-        if weights_adjusted > 0:
+    if not has_history:
+        # User is new - using base template
+        adaptations.append("Using base template - we'll personalize as you build history")
+    else:
+        # User has history - show personalizations
+        if removed_exercises:
             adaptations.append(
-                f"Personalized weights for {weights_adjusted} exercises based on your progression"
+                f"Removed {len(removed_exercises)} rarely-done exercises"
             )
 
-    adaptations.append(
-        f"Volume adjusted to {volume['avg_total_sets']:.0f} sets (your typical)"
-    )
+        if len(adapted_exercises) > 0:
+            weights_adjusted = sum(1 for ex in adapted_exercises if ex.get("suggested_weight_lbs"))
+            if weights_adjusted > 0:
+                adaptations.append(
+                    f"Suggested weights for {weights_adjusted} exercises based on your last workout"
+                )
+
+        if volume.get('avg_total_sets', 0) > 0:
+            adaptations.append(
+                f"Volume adjusted to {volume['avg_total_sets']:.0f} sets (your typical)"
+            )
 
     # 6. Return adaptive template
     return {
@@ -145,6 +166,99 @@ def generate_adaptive_template(workout_type: str, context: Optional[Dict] = None
         "adaptations": adaptations,
         "mode": "adaptive",
         "generated_at": datetime.now().isoformat()
+    }
+
+
+def generate_express_template(workout_type: str, base_template: Optional[Dict] = None) -> Dict[str, Any]:
+    """
+    Generate a shortened 'Express' version of a workout template.
+
+    Express workouts are designed for catch-up mode when multiple workouts
+    are needed with limited time. They maintain training effectiveness while
+    reducing total workout duration.
+
+    Express guidelines:
+    - Keep compound lifts (squat, deadlift, press, row variations)
+    - Remove or reduce isolation exercises
+    - Reduce sets: 4→3, 3→2, 2→2
+    - Target 5-6 exercises max (vs 8-10 normal)
+    - Target 30-35 min total time
+
+    Args:
+        workout_type: Push, Pull, Legs, Upper, Lower
+        base_template: Optional base template to shorten. If None, fetches template for workout_type.
+
+    Returns:
+        Express template dict with shortened exercise list and reduced sets
+    """
+    # Get base template if not provided
+    if not base_template:
+        base_template = get_template(workout_type.lower() + "_a")
+
+    if not base_template:
+        return {
+            "error": f"No template found for {workout_type}",
+            "mode": "error"
+        }
+
+    exercises = base_template.get("exercises", [])
+
+    # Compound exercise keywords for prioritization
+    compound_keywords = [
+        "squat", "deadlift", "press", "bench", "row", "pulldown",
+        "pull up", "dip", "lunge", "hip thrust"
+    ]
+
+    def is_compound(exercise_name: str) -> bool:
+        """Check if an exercise is a compound lift."""
+        name_lower = exercise_name.lower()
+        return any(kw in name_lower for kw in compound_keywords)
+
+    # Categorize exercises into compounds and accessories
+    compounds = []
+    accessories = []
+
+    for ex in exercises:
+        ex_name = ex.get("name", "")
+        if is_compound(ex_name):
+            compounds.append(ex.copy())  # Make copy to avoid mutating original
+        else:
+            accessories.append(ex.copy())
+
+    # Express selection strategy:
+    # - Keep up to 4 compound exercises (these are critical for strength)
+    # - Add 2 accessories max (target weak points or muscle balance)
+    express_exercises = compounds[:4]
+    express_exercises.extend(accessories[:2])
+
+    # Reduce sets to shorten workout time while maintaining intensity
+    for ex in express_exercises:
+        original_sets = ex.get("target_sets", 3)
+
+        # Set reduction logic
+        if original_sets >= 4:
+            ex["target_sets"] = 3  # 4+ sets → 3 sets
+        elif original_sets == 3:
+            ex["target_sets"] = 2  # 3 sets → 2 sets
+        # 2 sets stays at 2
+
+        # Keep rest_seconds and target_reps unchanged to maintain intensity
+
+    # Calculate estimated duration
+    # Estimate: 1 min per set + rest time, plus 5 min warmup
+    total_sets = sum(ex.get("target_sets", 3) for ex in express_exercises)
+    avg_rest = sum(ex.get("rest_seconds", 60) for ex in express_exercises) / len(express_exercises) if express_exercises else 60
+    estimated_duration = 5 + total_sets * (1 + avg_rest / 60)  # warmup + (work + rest) per set
+
+    return {
+        "id": f"express_{workout_type.lower()}",
+        "name": f"Express {workout_type}",
+        "type": workout_type,
+        "exercises": express_exercises,
+        "mode": "express",
+        "notes": f"Shortened version: {len(express_exercises)} exercises, ~{int(estimated_duration)} min. Prioritizes compound lifts.",
+        "estimated_duration_min": int(estimated_duration),
+        "base_template_id": base_template.get("id")
     }
 
 

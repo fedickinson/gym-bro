@@ -33,6 +33,68 @@ init_session_state()
 st.session_state.current_page = 'Progress'
 render_bottom_nav('Progress')
 
+# ============================================================================
+# Sidebar Navigation & Stats
+# ============================================================================
+
+with st.sidebar:
+    st.title("🏋️ Gym Bro")
+    st.caption("AI Fitness Coach")
+
+    st.divider()
+
+    # Quick navigation
+    st.subheader("Quick Links")
+
+    if st.button("🏠 Home", key="sidebar_prog_home", use_container_width=True):
+        st.switch_page("app.py")
+
+    if st.button("📅 View History", key="sidebar_prog_history", use_container_width=True):
+        st.switch_page("pages/3_History.py")
+
+    if st.button("🗑️ View Trash", key="sidebar_prog_trash", use_container_width=True):
+        st.switch_page("pages/5_Trash.py")
+
+    st.divider()
+
+    # Quick stats
+    st.subheader("Stats")
+
+    try:
+        from src.data import get_workout_count, get_all_logs
+        from datetime import date, timedelta
+
+        workouts_last_7 = get_workout_count(7)
+        workouts_last_30 = get_workout_count(30)
+
+        st.metric("Last 7 Days", workouts_last_7)
+        st.metric("Last 30 Days", workouts_last_30)
+
+        # Workout streak
+        logs = get_all_logs()
+        if logs:
+            # Calculate streak (consecutive days with workouts)
+            logs_by_date = {}
+            for log in logs:
+                log_date = log.get('date')
+                if log_date:
+                    logs_by_date[log_date] = True
+
+            streak = 0
+            current_date = date.today()
+            while current_date.isoformat() in logs_by_date:
+                streak += 1
+                current_date -= timedelta(days=1)
+
+            if streak > 0:
+                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
+
+    except Exception as e:
+        st.caption("Stats unavailable")
+
+    st.divider()
+    st.caption("Version 1.0.0")
+
 # Desktop optimizations
 st.markdown("""
 <style>
@@ -61,8 +123,15 @@ st.caption("Analyze your training trends and performance over time")
 # Exercise Selector
 # ============================================================================
 
-# Get unique exercises from recent workouts
+# Get unique exercises from recent workouts, with fallback to all-time
 exercises = get_unique_exercises(days=180)
+time_range_used = 180  # Track which range we're actually using
+
+if not exercises:
+    # No recent data, try all-time
+    st.info("📅 No workout data in the last 6 months. Showing all-time data instead.")
+    exercises = get_unique_exercises(days=0)  # 0 = all time
+    time_range_used = 0
 
 if not exercises:
     st.warning("No workout data found. Log some workouts to see your progress!")
@@ -80,8 +149,8 @@ else:
     with col2:
         time_range = st.selectbox(
             "Time Range",
-            ["30 days", "60 days", "90 days", "6 months", "1 year"],
-            index=2  # Default: 90 days
+            ["30 days", "60 days", "90 days", "6 months", "1 year", "All Time"],
+            index=2 if time_range_used != 0 else 5  # Default: 90 days, or All Time if we fell back
         )
 
     # Convert time range to days
@@ -90,7 +159,8 @@ else:
         "60 days": 60,
         "90 days": 90,
         "6 months": 180,
-        "1 year": 365
+        "1 year": 365,
+        "All Time": 0  # 0 = all time
     }
     days = range_map[time_range]
 

@@ -23,8 +23,13 @@ def record_and_transcribe() -> str | None:
     st.subheader("🎙️ Record Your Workout")
     st.caption("Tap to start, speak your workout, tap again to stop")
 
-    # Display audio recorder
+    # Initialize recorder key counter if not exists
+    if 'audio_recorder_key' not in st.session_state:
+        st.session_state.audio_recorder_key = 0
+
+    # Display audio recorder with dynamic key to force reset
     audio_bytes = audio_recorder(
+        key=f"audio_recorder_{st.session_state.audio_recorder_key}",
         text="",
         recording_color="#e74c3c",  # Red during recording
         neutral_color="#4CAF50",    # Green when ready
@@ -62,9 +67,9 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
             tmp_path = tmp_file.name
 
         # Transcribe with Whisper API
-        with st.spinner("🔄 Transcribing audio..."):
-            client = openai.OpenAI()
+        client = openai.OpenAI()
 
+        with st.spinner("Transcribing your audio... 🎙️"):
             with open(tmp_path, "rb") as audio_file:
                 transcription = client.audio.transcriptions.create(
                     model="whisper-1",
@@ -72,18 +77,18 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
                     language="en"
                 )
 
-            transcribed_text = transcription.text
+        transcribed_text = transcription.text
 
-            # Check if transcription is empty
-            if not transcribed_text.strip():
-                st.error("❌ Couldn't hear anything - try speaking louder")
-                return None
+        # Check if transcription is empty
+        if not transcribed_text.strip():
+            st.error("❌ Couldn't hear anything - try speaking louder")
+            return None
 
-            # Show what was heard
-            st.success("✅ Transcription complete!")
-            st.info(f"**You said:** {transcribed_text}")
+        # Show what was heard
+        st.success("✅ Transcription complete!")
+        st.info(f"**You said:** {transcribed_text}")
 
-            return transcribed_text
+        return transcribed_text
 
     except openai.APIError as e:
         st.error(f"❌ OpenAI API error: {str(e)}")
@@ -141,13 +146,24 @@ def combined_input() -> str | None:
     with col1:
         transcription = record_and_transcribe()
 
+        # Cache transcription in session state so it persists across reruns
+        if transcription:
+            st.session_state.cached_transcription = transcription
+
     with col2:
         manual_input = text_input_fallback()
 
-    # Return whichever is provided
+    # IMPORTANT: We're now outside the column context here
+    # Return cached transcription if available and no new input
     if transcription:
         return transcription
     elif manual_input and manual_input.strip():
+        # Clear cached transcription if user types instead
+        if 'cached_transcription' in st.session_state:
+            del st.session_state.cached_transcription
         return manual_input
+    elif 'cached_transcription' in st.session_state:
+        # Return cached transcription from previous recording
+        return st.session_state.cached_transcription
     else:
         return None

@@ -27,6 +27,21 @@ class Exercise(BaseModel):
     notes: str | None = None
 
 
+class SupplementaryExercise(BaseModel):
+    """An exercise in supplementary work (e.g., abs)."""
+    name: str
+    sets: list[Set]
+    notes: str | None = None
+
+
+class SupplementaryWork(BaseModel):
+    """Structured supplementary work data (e.g., abs session)."""
+    type: str  # "abs", "cardio", "stretching", etc.
+    template_id: str | None = None
+    exercises: list[SupplementaryExercise] = []
+    notes: str | None = None
+
+
 class Warmup(BaseModel):
     """Warmup activity before workout."""
     type: str  # "jog", "incline walk", "bike", etc.
@@ -49,6 +64,24 @@ class WorkoutLog(BaseModel):
     notes: str | None = None
     completed: bool = True
     created_at: datetime = Field(default_factory=datetime.now)
+
+    # Supplementary work tracking (e.g., abs done after main workout)
+    # NOTE: Old format was list[str] (e.g., ["abs"]). New format is list[SupplementaryWork]
+    # Migration happens in data.py
+    supplementary_work: list[SupplementaryWork] | list[str] | None = None
+
+    # Phase 6: Session-based workout tracking (plan vs actual)
+    session_id: str | None = None
+    suggested_type: str | None = None  # What AI originally suggested
+    planned_template_id: str | None = None  # ID of planned template
+    plan_adjustments: list[dict] | None = None  # Chat modifications to plan
+    deviations_detected: list[dict] | None = None  # Exercises that deviated from plan
+    equipment_unavailable: list[str] | None = None  # Equipment constraints during session
+
+    # Soft delete fields (30-day recovery window)
+    deleted: bool = False
+    deleted_at: datetime | None = None
+    deleted_by: str = "user"  # Default for single-user app, future-ready for multi-user
 
 
 # ============================================================================

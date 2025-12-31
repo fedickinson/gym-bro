@@ -62,6 +62,66 @@ st.caption("Ask questions about your workouts, get recommendations, or just chat
 # ============================================================================
 
 with st.sidebar:
+    st.title("🏋️ Gym Bro")
+    st.caption("AI Fitness Coach")
+
+    st.divider()
+
+    # Quick navigation
+    st.subheader("Quick Links")
+
+    if st.button("🏠 Home", key="sidebar_chat_home", use_container_width=True):
+        st.switch_page("app.py")
+
+    if st.button("📅 View History", key="sidebar_chat_history", use_container_width=True):
+        st.switch_page("pages/3_History.py")
+
+    if st.button("📊 View Progress", key="sidebar_chat_progress", use_container_width=True):
+        st.switch_page("pages/4_Progress.py")
+
+    if st.button("🗑️ View Trash", key="sidebar_chat_trash", use_container_width=True):
+        st.switch_page("pages/5_Trash.py")
+
+    st.divider()
+
+    # Quick stats
+    st.subheader("Stats")
+
+    try:
+        from src.data import get_workout_count, get_all_logs
+        from datetime import date, timedelta
+
+        workouts_last_7 = get_workout_count(7)
+        workouts_last_30 = get_workout_count(30)
+
+        st.metric("Last 7 Days", workouts_last_7)
+        st.metric("Last 30 Days", workouts_last_30)
+
+        # Workout streak
+        logs = get_all_logs()
+        if logs:
+            # Calculate streak (consecutive days with workouts)
+            logs_by_date = {}
+            for log in logs:
+                log_date = log.get('date')
+                if log_date:
+                    logs_by_date[log_date] = True
+
+            streak = 0
+            current_date = date.today()
+            while current_date.isoformat() in logs_by_date:
+                streak += 1
+                current_date -= timedelta(days=1)
+
+            if streak > 0:
+                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
+
+    except Exception as e:
+        st.caption("Stats unavailable")
+
+    st.divider()
+
+    # Chat-specific controls below
     st.subheader("Chat Controls")
 
     if st.button("🗑️ Clear History", use_container_width=True):
@@ -121,11 +181,15 @@ with st.sidebar:
     st.caption("• How many workouts did I do this month?")
     st.caption("• What's my bench press progression?")
     st.caption("• What should I do today?")
-    st.caption("• Am I balanced in my training?")
+    st.caption("• Let's do a push workout")
+    st.caption("• I want to workout but no barbell today")
     st.caption("• What's progressive overload?")
 
     st.divider()
     st.caption(f"Total messages: {len(st.session_state.chat_history)}")
+
+    st.divider()
+    st.caption("Version 1.0.0")
 
 # ============================================================================
 # Chat Display
@@ -135,6 +199,38 @@ with st.sidebar:
 for msg in st.session_state.chat_history:
     with st.chat_message(msg['role']):
         st.write(msg['content'])
+
+# ============================================================================
+# Workout Session Navigation (if created from chat)
+# ============================================================================
+
+if st.session_state.get('workout_session') and st.session_state.get('chat_initiated_workout'):
+    # A workout session was created from chat - show navigation
+    session = st.session_state.workout_session
+    workout_type = session.get('suggested_type', 'Unknown')
+    exercise_count = len(session.get('planned_template', {}).get('exercises', []))
+
+    st.divider()
+
+    st.success(f"✅ Your {workout_type} workout is ready!")
+    st.caption(f"{exercise_count} exercises planned")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        if st.button("🏋️ Continue to Workout →", type="primary", use_container_width=True, key="nav_to_workout"):
+            # Clear the flag so we don't show this button again
+            st.session_state.chat_initiated_workout = False
+            # Navigate to workout page (session is already in state)
+            st.switch_page("pages/1_Log_Workout.py")
+
+    # Option to cancel
+    if st.button("❌ Cancel Workout", use_container_width=False):
+        from src.ui.session import reset_workout_session
+        reset_workout_session()
+        st.rerun()
+
+    st.divider()
 
 # ============================================================================
 # Chat Input
@@ -153,14 +249,29 @@ if user_input := st.chat_input("Ask me anything..."):
         with st.spinner("Thinking..."):
             try:
                 orchestrator = get_orchestrator()
-                response = orchestrator.chat(user_input)
+                # Use process_message to get full result with session_data
+                # Pass chat history for conversation context (excluding current message already added)
+                result = orchestrator.process_message(
+                    user_input,
+                    chat_history=st.session_state.chat_history[:-1]  # Exclude the message we just added
+                )
+
+                response = result["response"]
+                session_data = result.get("session_data")
 
                 # Display response
                 st.write(response)
 
+                # If a workout session was created, store it in session state
+                if session_data:
+                    st.session_state.workout_session = session_data
+                    st.session_state.chat_initiated_workout = True
+                    st.session_state.log_state = 'planning_chat'  # Set to planning state
+
                 # Add assistant message to history with metadata
-                # (orchestrator.chat doesn't return agent info, but we can add it later if needed)
-                add_chat_message("assistant", response, agent="orchestrator")
+                add_chat_message("assistant", response,
+                                agent=result.get("handler", "orchestrator"),
+                                intent=result.get("intent"))
 
             except Exception as e:
                 error_msg = f"Sorry, I encountered an error: {str(e)}"
@@ -183,6 +294,7 @@ if not st.session_state.chat_history:
         - **Track your progress** ("How's my bench press looking?")
         - **Answer questions** ("How many leg workouts did I do this month?")
         - **Give recommendations** ("What should I do today?")
+        - **Start workouts** ("Let's do a push workout" or "I want to workout but no barbell")
         - **Chat about fitness** ("Tell me about progressive overload")
 
         What would you like to know?

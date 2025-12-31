@@ -120,6 +120,88 @@
         }
       ],
       "notes": "Depth is more important than weight on squats"
+    },
+    {
+      "id": "upper_a",
+      "name": "Upper Day A",
+      "type": "Upper",
+      "exercises": [
+        {
+          "name": "Dumbbell Incline Bench Press",
+          "target_sets": 4,
+          "target_reps": 8,
+          "rest_seconds": 90
+        },
+        {
+          "name": "Pull Ups",
+          "target_sets": 3,
+          "target_reps": 8,
+          "rest_seconds": 90
+        },
+        {
+          "name": "Overhead Press",
+          "target_sets": 3,
+          "target_reps": 10,
+          "rest_seconds": 90
+        },
+        {
+          "name": "Cable Row",
+          "target_sets": 3,
+          "target_reps": 12,
+          "rest_seconds": 60
+        },
+        {
+          "name": "Lateral Raise",
+          "target_sets": 3,
+          "target_reps": 15,
+          "rest_seconds": 45
+        },
+        {
+          "name": "Bicep Curl",
+          "target_sets": 3,
+          "target_reps": 12,
+          "rest_seconds": 60
+        }
+      ],
+      "notes": "Balanced upper body work - chest, back, shoulders, arms"
+    },
+    {
+      "id": "lower_a",
+      "name": "Lower Day A",
+      "type": "Lower",
+      "exercises": [
+        {
+          "name": "Squat",
+          "target_sets": 4,
+          "target_reps": 8,
+          "rest_seconds": 120
+        },
+        {
+          "name": "Romanian Deadlift",
+          "target_sets": 3,
+          "target_reps": 10,
+          "rest_seconds": 90
+        },
+        {
+          "name": "Leg Press",
+          "target_sets": 3,
+          "target_reps": 12,
+          "rest_seconds": 90
+        },
+        {
+          "name": "Leg Curl",
+          "target_sets": 3,
+          "target_reps": 12,
+          "rest_seconds": 60
+        },
+        {
+          "name": "Calf Raise",
+          "target_sets": 4,
+          "target_reps": 20,
+          "rest_seconds": 45
+        }
+      ],
+      "notes": "Complete lower body - quads, hamstrings, glutes, calves"
     }
   ]
 }

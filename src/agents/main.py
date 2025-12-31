@@ -26,6 +26,7 @@ Architecture:
 
 from src.agents.router import IntentRouter, quick_route
 from src.chains.chat_chain import ChatChain
+from src.agents.chat_agent import ChatAgent
 from src.agents.query_agent import QueryAgent
 from src.agents.recommend_agent import RecommendAgent
 from src.chains.admin_chain import AdminChain
@@ -40,12 +41,10 @@ class GymBroOrchestrator:
 
     Components:
     - Intent Router: Classifies user input → intent
-    - Chat Chain: Handles general conversation
+    - Chat Agent: Handles conversation with data access and workout planning
     - Query Agent: Answers questions about workout history
     - Recommend Agent: Provides workout recommendations
     - Admin Chain: Handles edit/delete operations
-
-    Coming in Phase 3:
     - Log Graph: Multi-step workout logging with confirmation
     """
 
@@ -55,7 +54,7 @@ class GymBroOrchestrator:
 
         This creates instances of:
         - Router (for intent classification)
-        - Chat Chain (for conversation)
+        - Chat Agent (for conversation with data access)
         - Query Agent (for data queries)
         - Recommend Agent (for planning)
         - Admin Chain (for admin operations)
@@ -66,25 +65,29 @@ class GymBroOrchestrator:
         self.router = IntentRouter()
 
         # Handlers for each intent
-        self.chat_chain = ChatChain()
+        self.chat_agent = ChatAgent()  # New: Conversational agent with tools
+        self.chat_chain = ChatChain()  # Kept for backward compatibility
         self.query_agent = QueryAgent()
         self.recommend_agent = RecommendAgent()
         self.admin_chain = AdminChain()
 
         print("✅ All systems ready!\n")
 
-    def process_message(self, user_input: str) -> dict:
+    def process_message(self, user_input: str, chat_history: list = None) -> dict:
         """
         Main entry point - process a user message and return a response.
 
         Args:
             user_input: What the user said
+            chat_history: Optional list of previous messages for context
+                         Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}, ...]
 
         Returns:
             Dict with:
             - intent: The classified intent
             - response: The handler's response
             - handler: Which handler was used
+            - session_data: Session data if workout session was created (or None)
 
         Example:
             orchestrator = GymBroOrchestrator()
@@ -93,7 +96,16 @@ class GymBroOrchestrator:
             # {
             #   "intent": "query",
             #   "handler": "query_agent",
-            #   "response": "Your bench press PR is 135 lbs!"
+            #   "response": "Your bench press PR is 135 lbs!",
+            #   "session_data": None
+            # }
+
+            result = orchestrator.process_message("Let's do legs", chat_history=[...])
+            # {
+            #   "intent": "chat",
+            #   "handler": "chat_agent",
+            #   "response": "Perfect! I've created...",
+            #   "session_data": {...}  # Full session state
             # }
         """
         # Step 1: Classify intent
@@ -107,43 +119,47 @@ class GymBroOrchestrator:
         print(f"🎯 Intent: {intent}")
 
         # Step 2: Route to appropriate handler
-        handler_name, response = self._route_to_handler(intent, user_input)
+        handler_name, response, session_data = self._route_to_handler(intent, user_input, chat_history)
 
         # Step 3: Return structured result
         return {
             "intent": intent,
             "handler": handler_name,
-            "response": response
+            "response": response,
+            "session_data": session_data
         }
 
-    def _route_to_handler(self, intent: str, user_input: str) -> tuple[str, str]:
+    def _route_to_handler(self, intent: str, user_input: str, chat_history: list = None) -> tuple[str, str]:
         """
         Internal method to route to the correct handler based on intent.
 
         Args:
             intent: The classified intent (log, query, recommend, chat, admin)
             user_input: The user's message
+            chat_history: Optional conversation history for context
 
         Returns:
-            Tuple of (handler_name, response)
+            Tuple of (handler_name, response, session_data)
         """
         try:
             if intent == "chat":
-                response = self.chat_chain.chat(user_input)
-                return ("chat_chain", response)
+                result = self.chat_agent.chat(user_input, chat_history=chat_history)
+                # ChatAgent now returns dict with response + session_data
+                response = result.get("response") if isinstance(result, dict) else result
+                return ("chat_agent", response, result.get("session_data") if isinstance(result, dict) else None)
 
             elif intent == "query":
                 response = self.query_agent.query(user_input)
-                return ("query_agent", response)
+                return ("query_agent", response, None)
 
             elif intent == "recommend":
                 response = self.recommend_agent.recommend(user_input)
-                return ("recommend_agent", response)
+                return ("recommend_agent", response, None)
 
             elif intent == "admin":
                 # For now, just use the delete latest demo
                 response = self.admin_chain.handle_delete_latest()
-                return ("admin_chain", response)
+                return ("admin_chain", response, None)
 
             elif intent == "log":
                 # Phase 3: LangGraph workout logging!
@@ -154,16 +170,17 @@ class GymBroOrchestrator:
                 # Note: In a real Streamlit app, we'd return the state
                 # and wait for user confirmation. For CLI demo, we auto-approve.
                 # See log_graph.py for full implementation.
-                return ("log_graph", response)
+                return ("log_graph", response, None)
 
             else:
                 # Fallback to chat for unknown intents
-                response = self.chat_chain.chat(user_input)
-                return ("chat_chain_fallback", response)
+                result = self.chat_agent.chat(user_input, chat_history=chat_history)
+                response = result.get("response") if isinstance(result, dict) else result
+                return ("chat_agent_fallback", response, result.get("session_data") if isinstance(result, dict) else None)
 
         except Exception as e:
             # Error handling - return friendly error message
-            return ("error", f"Oops! Something went wrong: {str(e)}")
+            return ("error", f"Oops! Something went wrong: {str(e)}", None)
 
     def chat(self, user_input: str) -> str:
         """
