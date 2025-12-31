@@ -86,22 +86,35 @@ def render_workout_review(session: dict):
     if equipment_unavailable:
         st.caption(f"⚠️ Equipment unavailable: {', '.join(equipment_unavailable)}")
 
-    # List all exercises
+    # List all exercises with Phase 2 prominent text
     st.divider()
     for i, ex in enumerate(accumulated_exercises, 1):
-        with st.expander(f"**{i}. {ex.get('name')}**", expanded=False):
-            sets = ex.get('sets', [])
-            if sets:
-                for j, s in enumerate(sets, 1):
-                    reps = s.get('reps', '?')
-                    weight = s.get('weight_lbs')
+        ex_name = ex.get('name', 'Unknown')
+        sets = ex.get('sets', [])
 
-                    if weight:
-                        st.write(f"Set {j}: **{reps} reps** @ **{weight} lbs**")
-                    else:
-                        st.write(f"Set {j}: **{reps} reps** (bodyweight)")
-            else:
-                st.caption("No sets recorded")
+        # Exercise name - large and prominent
+        st.markdown(f'<div class="exercise-title">{i}. {ex_name}</div>', unsafe_allow_html=True)
+        st.caption(f"{len(sets)} sets")
+
+        if sets:
+            # Show sets with larger text
+            for j, s in enumerate(sets, 1):
+                reps = s.get('reps', '?')
+                weight = s.get('weight_lbs')
+
+                if weight:
+                    st.markdown(f'<div class="set-detail">Set {j}: {reps} reps @ {weight} lbs</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="set-detail">Set {j}: {reps} reps (bodyweight)</div>', unsafe_allow_html=True)
+
+            # Calculate and show volume for this exercise
+            volume = sum(s.get('reps', 0) * s.get('weight_lbs', 0) for s in sets)
+            if volume > 0:
+                st.markdown(f'<div class="stat-highlight">Volume: {volume:,.0f} lbs</div>', unsafe_allow_html=True)
+        else:
+            st.caption("No sets recorded")
+
+        st.divider()
 
     # Show total sets
     total_sets = sum(len(ex.get('sets', [])) for ex in accumulated_exercises)

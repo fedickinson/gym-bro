@@ -15,6 +15,7 @@ from src.ui.navigation import render_bottom_nav
 from src.ui.confirmation_dialogs import show_delete_confirmation
 from src.tools.recommend_tools import get_weekly_split_status
 from src.data import get_all_logs, get_logs_by_date_range
+from src.ui.styles import get_global_styles
 
 # CRITICAL: Import audio recorder here to initialize component for multipage app
 try:
@@ -60,68 +61,27 @@ st.session_state.current_page = 'Home'
 render_bottom_nav('Home')
 
 # ============================================================================
-# Custom CSS for Mobile-First Design
+# Apply Global Design System
 # ============================================================================
 
+st.markdown(get_global_styles(), unsafe_allow_html=True)
+
+# Additional home-specific styles
 st.markdown("""
 <style>
-/* Desktop optimizations (default) */
-@media (min-width: 769px) {
-    /* Hide bottom nav on desktop (use sidebar instead) */
-    .bottom-nav {
-        display: none !important;
-    }
-
-    /* Better spacing for desktop */
-    .main .block-container {
-        padding: 2rem 2rem !important;
-        max-width: 1200px !important;
-    }
-
-    /* Slightly smaller buttons on desktop */
-    .huge-button > div > div > div > button {
-        height: 80px !important;
-    }
-}
-
-/* Mobile optimizations */
-@media (max-width: 768px) {
-    /* Reduce padding on mobile */
-    .main .block-container {
-        padding: 1rem 1rem 5rem 1rem !important;
-    }
-
-    /* Larger text for readability */
-    .main {
-        font-size: 16px !important;
-    }
-
-    /* Hide sidebar on mobile (will use bottom nav) */
-    section[data-testid="stSidebar"] {
-        display: none;
-    }
-}
-
-/* Huge button for primary actions */
+/* Huge button for LOG WORKOUT (primary action) */
 .huge-button {
     padding: 0.5rem 0;
 }
 
 .huge-button > div > div > div > button {
-    height: 100px !important;
-    font-size: 24px !important;
-    font-weight: bold !important;
+    min-height: 56px !important;
+    font-size: 1.125rem !important;
+    font-weight: 600 !important;
     width: 100% !important;
     border-radius: 12px !important;
-    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+    background: var(--color-accent-gradient) !important;
     border: none !important;
-}
-
-/* Touch-friendly buttons */
-.stButton > button {
-    min-height: 50px !important;
-    font-size: 16px !important;
-    width: 100% !important;
 }
 
 /* Red delete buttons */
@@ -152,35 +112,10 @@ button:has(p:contains("❌")) {
     margin: 0 !important;
 }
 
-/* Metrics styling */
-[data-testid="stMetricValue"] {
-    font-size: 28px !important;
-    color: #4CAF50 !important;
-}
-
-/* Card styling */
-.workout-card {
-    background: #1E1E1E;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    border: 1px solid #333;
-}
-
-/* Desktop improvements */
+/* Desktop optimizations */
 @media (min-width: 769px) {
-    /* Better header sizing */
-    h1 {
-        font-size: 2.5rem !important;
-    }
-
-    h2 {
-        font-size: 1.8rem !important;
-    }
-
-    /* Better metric display */
-    [data-testid="stMetricValue"] {
-        font-size: 32px !important;
+    .huge-button > div > div > div > button {
+        min-height: 48px !important;
     }
 }
 </style>
@@ -377,23 +312,53 @@ try:
             col_expand, col_delete = st.columns([6, 1])
 
             with col_expand:
-                # Create expander title with supplementary work badge
-                expander_title = f"{log.get('type', 'Unknown')} - {log.get('date', 'Unknown date')}"
+                # Create expander title with exercise preview
+                exercises = log.get('exercises', [])
+                workout_type = log.get('type', 'Unknown')
+                workout_date = log.get('date', 'Unknown date')
+
+                # Build title with first 2 exercises as preview
+                exercise_preview = ''
+                if exercises:
+                    exercise_names = [ex.get('name', 'Unknown') for ex in exercises[:2]]
+                    exercise_preview = f" - {', '.join(exercise_names)}"
+                    if len(exercises) > 2:
+                        exercise_preview += f", +{len(exercises)-2} more"
+
+                expander_title = f"**{workout_type}** {workout_date}{exercise_preview}"
+
+                # Add supplementary work badge
                 supplementary = log.get('supplementary_work', [])
                 if supplementary:
                     supp_badges = ' '.join([f"💪 {s.title()}" for s in supplementary])
                     expander_title += f" | {supp_badges}"
 
                 with st.expander(expander_title):
-                    exercises = log.get('exercises', [])
-
+                    # Phase 2: Show exercises with larger, more prominent text
                     if exercises:
-                        st.write("**Exercises:**")
-                        for ex in exercises:
-                            sets_count = len(ex.get('sets', []))
-                            st.write(f"• {ex.get('name', 'Unknown')}: {sets_count} sets")
+                        for i, ex in enumerate(exercises, 1):
+                            ex_name = ex.get('name', 'Unknown')
+                            sets = ex.get('sets', [])
+                            sets_count = len(sets)
+
+                            # Exercise name - larger text
+                            st.markdown(f'<div class="text-emphasis">{i}. {ex_name}</div>', unsafe_allow_html=True)
+                            st.caption(f"{sets_count} sets")
+
+                            # Show set details
+                            for j, s in enumerate(sets, 1):
+                                reps = s.get('reps', '?')
+                                weight = s.get('weight_lbs')
+                                if weight:
+                                    st.caption(f"  Set {j}: {reps} reps @ {weight} lbs")
+                                else:
+                                    st.caption(f"  Set {j}: {reps} reps")
+
+                            if i < len(exercises):
+                                st.write("")  # Spacing between exercises
 
                     if log.get('notes'):
+                        st.divider()
                         st.caption(f"*Notes: {log['notes']}*")
 
                     # View full workout button

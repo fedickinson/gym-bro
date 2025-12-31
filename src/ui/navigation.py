@@ -11,123 +11,91 @@ Provides mobile-first bottom navigation bar that:
 import streamlit as st
 
 
-def inject_bottom_nav_css():
-    """
-    Inject CSS for mobile-first bottom navigation.
-
-    This creates a fixed bottom nav bar on mobile that:
-    - Sticks to the bottom of the viewport
-    - Has large touch targets (44px minimum per iOS guidelines)
-    - Hides on desktop (>768px width)
-    - Adds bottom padding to content so it doesn't overlap
-    """
-    st.markdown("""
-    <style>
-    /* Bottom Navigation Bar (Mobile Only) */
-    @media (max-width: 768px) {
-        /* Bottom nav container */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 60px;
-            background: #1E1E1E;
-            border-top: 1px solid #333;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            z-index: 999;
-            padding: 0;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
-        }
-
-        /* Nav items */
-        .nav-item {
-            flex: 1;
-            text-align: center;
-            padding: 8px 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-            min-height: 44px; /* iOS touch target guideline */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: #FAFAFA;
-            text-decoration: none;
-        }
-
-        .nav-item:active {
-            background: #333;
-        }
-
-        .nav-item.active {
-            color: #4CAF50;
-            border-top: 2px solid #4CAF50;
-        }
-
-        /* Icon sizing */
-        .nav-item .icon {
-            font-size: 24px;
-            margin-bottom: 2px;
-        }
-
-        .nav-item .label {
-            font-size: 10px;
-            font-weight: 500;
-        }
-
-        /* Add bottom padding to main content to prevent overlap */
-        .main .block-container {
-            padding-bottom: 80px !important;
-        }
-    }
-
-    /* Desktop: hide bottom nav */
-    @media (min-width: 769px) {
-        .bottom-nav {
-            display: none;
-        }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-
 def render_bottom_nav(current_page: str):
     """
     Render the bottom navigation bar.
 
+    Uses classes from global styles (src/ui/styles.py) with proper Streamlit navigation.
+
     Args:
         current_page: Name of the current page ('Home', 'Log', 'Chat', 'History', 'Progress')
     """
-    inject_bottom_nav_css()
-
-    # Navigation items
+    # Navigation items - using Streamlit button approach for reliable navigation
     nav_items = [
-        {"label": "Home", "icon": "🏠", "page": "app"},
-        {"label": "Log", "icon": "🎙️", "page": "pages/1_Log_Workout"},
-        {"label": "Chat", "icon": "💬", "page": "pages/2_Chat"},
-        {"label": "History", "icon": "📅", "page": "pages/3_History"},
-        {"label": "Progress", "icon": "📊", "page": "pages/4_Progress"},
+        {"label": "Home", "icon": "🏠", "page": "app.py"},
+        {"label": "Log", "icon": "🎙️", "page": "pages/1_Log_Workout.py"},
+        {"label": "Chat", "icon": "💬", "page": "pages/2_Chat.py"},
+        {"label": "History", "icon": "📅", "page": "pages/3_History.py"},
+        {"label": "Progress", "icon": "📊", "page": "pages/4_Progress.py"},
     ]
 
-    # Build HTML for bottom nav
-    nav_html = '<div class="bottom-nav">'
+    # Use columns to create the bottom nav layout
+    # We'll style them to look like the fixed bottom nav with CSS
+    st.markdown("""
+    <style>
+    /* Override for navigation buttons to look like nav items */
+    div[data-testid="column"] > div > div > div > button[kind="secondary"] {
+        background: transparent !important;
+        border: none !important;
+        color: var(--color-text-secondary) !important;
+        min-height: 60px !important;
+        padding: 8px 4px !important;
+        font-size: 0.75rem !important;
+    }
 
-    for item in nav_items:
-        active_class = "active" if item["label"] == current_page else ""
+    div[data-testid="column"] > div > div > div > button[kind="secondary"]:hover {
+        background: var(--color-bg-tertiary) !important;
+        color: var(--color-text-primary) !important;
+    }
 
-        nav_html += f'''
-        <div class="nav-item {active_class}" onclick="window.parent.location.href='/{item["page"]}.py'">
-            <div class="icon">{item["icon"]}</div>
-            <div class="label">{item["label"]}</div>
-        </div>
-        '''
+    /* Container for bottom nav */
+    .nav-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--color-bg-secondary);
+        border-top: 1px solid var(--color-border);
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+        z-index: 999;
+        padding: 0;
+    }
 
-    nav_html += '</div>'
+    /* Hide on desktop */
+    @media (min-width: 769px) {
+        .nav-container {
+            display: none !important;
+        }
+    }
+    </style>
+    <div class="nav-container">
+    """, unsafe_allow_html=True)
 
-    st.markdown(nav_html, unsafe_allow_html=True)
+    # Create equal columns for nav items
+    cols = st.columns(len(nav_items))
+
+    for idx, item in enumerate(nav_items):
+        with cols[idx]:
+            # Check if this is the active page
+            if item["label"] == current_page:
+                # Active page - show without button
+                st.markdown(f"""
+                <div style="text-align: center; padding: 8px 4px; color: var(--color-primary-500); border-top: 2px solid var(--color-primary-500);">
+                    <div style="font-size: 24px; margin-bottom: 2px;">{item["icon"]}</div>
+                    <div style="font-size: 0.75rem;">{item["label"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                # Not active - show as clickable button
+                if st.button(
+                    f"{item['icon']}\n{item['label']}",
+                    key=f"nav_{item['label']}_btn",
+                    use_container_width=True,
+                    type="secondary"
+                ):
+                    st.switch_page(item["page"])
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def get_current_page_name() -> str:
