@@ -4,6 +4,10 @@ Chat Page - Conversational interface with the AI fitness coach.
 Routes questions to Query Agent, Recommend Agent, or Chat Chain based on intent.
 """
 
+# Load environment variables FIRST
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 from src.ui.session import init_session_state, add_chat_message, clear_chat_history, get_orchestrator
 from src.ui.navigation import render_bottom_nav
