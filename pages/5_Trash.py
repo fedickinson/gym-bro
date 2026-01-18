@@ -4,6 +4,10 @@ Trash Page - View and restore deleted workouts.
 Soft-deleted workouts are kept for 30 days before permanent deletion.
 """
 
+# Load environment variables FIRST
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 from datetime import datetime, timedelta
 from src.ui.session import init_session_state

@@ -4,6 +4,10 @@ History Page - Browse and filter past workouts.
 Allows filtering by type, date range, and exercise search.
 """
 
+# Load environment variables FIRST
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 from datetime import date, timedelta
 from src.ui.session import init_session_state
@@ -83,7 +87,7 @@ with st.sidebar:
         'This year': 365,
         'All time': 0
     }
-    selected_range = st.selectbox("Date Range", list(date_range_options.keys()), index=4, key="sidebar_range")  # Default: Last 3 months
+    selected_range = st.selectbox("Date Range", list(date_range_options.keys()), index=7, key="sidebar_range")  # Default: All time
     days = date_range_options[selected_range]
 
     # Exercise search
@@ -108,7 +112,7 @@ with st.expander("🔍 Filters", expanded=False):
     mobile_type = st.selectbox("Workout Type", workout_types, key="mobile_type")
 
     # Date range filter
-    mobile_range = st.selectbox("Date Range", list(date_range_options.keys()), index=4, key="mobile_range")
+    mobile_range = st.selectbox("Date Range", list(date_range_options.keys()), index=7, key="mobile_range")
 
     # Exercise search
     mobile_search = st.text_input("Search Exercise", placeholder="e.g., bench press", key="mobile_search")

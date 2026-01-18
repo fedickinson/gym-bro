@@ -1,27 +1,14 @@
 """
 Data layer for reading/writing workout data.
+
+Migrated from JSON files to Supabase (Postgres) for persistent cloud storage.
+All function signatures remain unchanged for backward compatibility.
 """
-import json
-from pathlib import Path
+
 from datetime import datetime, date, timedelta
 from typing import Optional
+from src.database import get_supabase_client
 
-DATA_DIR = Path(__file__).parent.parent / "data"
-
-def _load_json(filename: str) -> dict:
-    """Load a JSON file from the data directory."""
-    filepath = DATA_DIR / filename
-    if not filepath.exists():
-        return {}
-    with open(filepath, 'r') as f:
-        return json.load(f)
-
-def _save_json(filename: str, data: dict) -> None:
-    """Save data to a JSON file."""
-    filepath = DATA_DIR / filename
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=2, default=str)
 
 def migrate_supplementary_work(log: dict) -> dict:
     """
@@ -64,6 +51,7 @@ def migrate_supplementary_work(log: dict) -> dict:
 
     return log
 
+
 # ============================================================================
 # Workout Logs
 # ============================================================================
@@ -78,16 +66,20 @@ def get_all_logs(include_deleted: bool = False) -> list:
     Returns:
         List of workout logs
     """
-    data = _load_json("workout_logs.json")
-    logs = data.get("logs", [])
+    sb = get_supabase_client()
+
+    query = sb.table("workout_logs").select("*").order("date", desc=True)
+    if not include_deleted:
+        query = query.eq("deleted", False)
+
+    result = query.execute()
+    logs = result.data
 
     # Migrate supplementary_work field from old format to new
     logs = [migrate_supplementary_work(log) for log in logs]
 
-    if not include_deleted:
-        logs = [log for log in logs if not log.get("deleted", False)]
-
     return logs
+
 
 def get_logs_by_date_range(start: date, end: date, include_deleted: bool = False) -> list:
     """
@@ -101,19 +93,24 @@ def get_logs_by_date_range(start: date, end: date, include_deleted: bool = False
     Returns:
         List of workout logs in date range
     """
-    logs = get_all_logs(include_deleted=include_deleted)
-    results = []
-    for log in logs:
-        log_date_str = log.get("date")
-        if not log_date_str:
-            continue
-        try:
-            log_date = date.fromisoformat(log_date_str)
-            if start <= log_date <= end:
-                results.append(log)
-        except ValueError:
-            continue
-    return results
+    sb = get_supabase_client()
+
+    query = sb.table("workout_logs").select("*") \
+        .gte("date", start.isoformat()) \
+        .lte("date", end.isoformat()) \
+        .order("date", desc=True)
+
+    if not include_deleted:
+        query = query.eq("deleted", False)
+
+    result = query.execute()
+    logs = result.data
+
+    # Migrate supplementary_work field
+    logs = [migrate_supplementary_work(log) for log in logs]
+
+    return logs
+
 
 def get_logs_by_exercise(exercise_name: str, include_deleted: bool = False) -> list:
     """
@@ -126,14 +123,19 @@ def get_logs_by_exercise(exercise_name: str, include_deleted: bool = False) -> l
     Returns:
         List of workout logs containing the exercise
     """
+    # Get all logs and filter in-memory for now
+    # Could optimize with JSONB containment queries in future
     logs = get_all_logs(include_deleted=include_deleted)
+
     results = []
     for log in logs:
         for exercise in log.get("exercises", []):
             if exercise_name.lower() in exercise.get("name", "").lower():
                 results.append(log)
                 break
+
     return results
+
 
 def add_log(log: dict) -> str:
     """
@@ -154,34 +156,43 @@ def add_log(log: dict) -> str:
     # Migrate supplementary_work if needed (handles both old and new format)
     log = migrate_supplementary_work(log)
 
-    data = _load_json("workout_logs.json")
-    if "logs" not in data:
-        data["logs"] = []
+    sb = get_supabase_client()
 
     # Generate ID if not present
     if "id" not in log:
         date_str = log.get("date", date.today().isoformat())
-        count = len([l for l in data["logs"] if l.get("date") == date_str]) + 1
+        # Query existing logs for this date to get count
+        existing = sb.table("workout_logs") \
+            .select("id") \
+            .eq("date", date_str) \
+            .execute()
+        count = len(existing.data) + 1
         log["id"] = f"{date_str}-{count:03d}"
 
-    log["created_at"] = datetime.now().isoformat()
-    data["logs"].append(log)
-    _save_json("workout_logs.json", data)
+    # Ensure created_at is set
+    if "created_at" not in log:
+        log["created_at"] = datetime.now().isoformat()
+
+    # Insert into database
+    sb.table("workout_logs").insert(log).execute()
 
     # Update weekly split tracking
     _update_weekly_split_after_log(log)
 
     return log["id"]
 
+
 def update_log(log_id: str, updates: dict) -> bool:
     """Update an existing log."""
-    data = _load_json("workout_logs.json")
-    for i, log in enumerate(data.get("logs", [])):
-        if log.get("id") == log_id:
-            data["logs"][i].update(updates)
-            _save_json("workout_logs.json", data)
-            return True
-    return False
+    sb = get_supabase_client()
+
+    result = sb.table("workout_logs") \
+        .update(updates) \
+        .eq("id", log_id) \
+        .execute()
+
+    return len(result.data) > 0
+
 
 def delete_log(log_id: str) -> bool:
     """
@@ -196,14 +207,17 @@ def delete_log(log_id: str) -> bool:
     Returns:
         True if successful, False if log not found
     """
-    data = _load_json("workout_logs.json")
-    for i, log in enumerate(data.get("logs", [])):
-        if log.get("id") == log_id:
-            data["logs"][i]["deleted"] = True
-            data["logs"][i]["deleted_at"] = datetime.now().isoformat()
-            _save_json("workout_logs.json", data)
-            return True
-    return False
+    sb = get_supabase_client()
+
+    result = sb.table("workout_logs") \
+        .update({
+            "deleted": True,
+            "deleted_at": datetime.now().isoformat()
+        }) \
+        .eq("id", log_id) \
+        .execute()
+
+    return len(result.data) > 0
 
 
 def restore_log(log_id: str) -> bool:
@@ -218,16 +232,27 @@ def restore_log(log_id: str) -> bool:
     Returns:
         True if successful, False if log not found or not deleted
     """
-    data = _load_json("workout_logs.json")
-    for i, log in enumerate(data.get("logs", [])):
-        if log.get("id") == log_id:
-            if not log.get("deleted", False):
-                return False  # Log wasn't deleted
-            data["logs"][i]["deleted"] = False
-            data["logs"][i]["deleted_at"] = None
-            _save_json("workout_logs.json", data)
-            return True
-    return False
+    sb = get_supabase_client()
+
+    # First check if log exists and is deleted
+    check = sb.table("workout_logs") \
+        .select("deleted") \
+        .eq("id", log_id) \
+        .execute()
+
+    if not check.data or not check.data[0].get("deleted", False):
+        return False  # Log not found or not deleted
+
+    # Restore the log
+    result = sb.table("workout_logs") \
+        .update({
+            "deleted": False,
+            "deleted_at": None
+        }) \
+        .eq("id", log_id) \
+        .execute()
+
+    return len(result.data) > 0
 
 
 def delete_log_permanent(log_id: str) -> bool:
@@ -243,13 +268,14 @@ def delete_log_permanent(log_id: str) -> bool:
     Returns:
         True if successful, False if log not found
     """
-    data = _load_json("workout_logs.json")
-    original_count = len(data.get("logs", []))
-    data["logs"] = [l for l in data.get("logs", []) if l.get("id") != log_id]
-    if len(data["logs"]) < original_count:
-        _save_json("workout_logs.json", data)
-        return True
-    return False
+    sb = get_supabase_client()
+
+    result = sb.table("workout_logs") \
+        .delete() \
+        .eq("id", log_id) \
+        .execute()
+
+    return len(result.data) > 0
 
 
 def bulk_delete_logs(log_ids: list[str]) -> dict:
@@ -262,24 +288,17 @@ def bulk_delete_logs(log_ids: list[str]) -> dict:
     Returns:
         Dict with success count and failed IDs
     """
-    data = _load_json("workout_logs.json")
     deleted_count = 0
     failed_ids = []
 
     for log_id in log_ids:
-        found = False
-        for i, log in enumerate(data.get("logs", [])):
-            if log.get("id") == log_id:
-                data["logs"][i]["deleted"] = True
-                data["logs"][i]["deleted_at"] = datetime.now().isoformat()
+        try:
+            if delete_log(log_id):
                 deleted_count += 1
-                found = True
-                break
-        if not found:
+            else:
+                failed_ids.append(log_id)
+        except Exception:
             failed_ids.append(log_id)
-
-    if deleted_count > 0:
-        _save_json("workout_logs.json", data)
 
     return {
         "deleted_count": deleted_count,
@@ -298,11 +317,15 @@ def get_deleted_logs() -> list:
     Returns:
         List of deleted workout logs
     """
-    data = _load_json("workout_logs.json")
-    deleted = [log for log in data.get("logs", []) if log.get("deleted", False)]
-    # Sort by deletion date descending
-    deleted.sort(key=lambda x: x.get("deleted_at", ""), reverse=True)
-    return deleted
+    sb = get_supabase_client()
+
+    result = sb.table("workout_logs") \
+        .select("*") \
+        .eq("deleted", True) \
+        .order("deleted_at", desc=True) \
+        .execute()
+
+    return result.data
 
 
 def cleanup_old_deleted_logs(days_threshold: int = 30) -> dict:
@@ -341,20 +364,28 @@ def cleanup_old_deleted_logs(days_threshold: int = 30) -> dict:
         "cutoff_date": cutoff_date.isoformat()
     }
 
+
 # ============================================================================
 # Templates
 # ============================================================================
 
 def get_all_templates() -> list:
     """Get all workout templates."""
-    data = _load_json("templates.json")
-    return data.get("templates", [])
+    sb = get_supabase_client()
+
+    result = sb.table("templates") \
+        .select("*") \
+        .order("type") \
+        .execute()
+
+    return result.data
+
 
 def get_template(template_id: str) -> Optional[dict]:
     """Get a specific template by ID or type name."""
     templates = get_all_templates()
     template_id_lower = template_id.lower()
-    
+
     for template in templates:
         # Match by ID
         if template.get("id", "").lower() == template_id_lower:
@@ -367,29 +398,48 @@ def get_template(template_id: str) -> Optional[dict]:
             return template
     return None
 
+
 # ============================================================================
 # Exercises
 # ============================================================================
 
 def get_all_exercises() -> list:
     """Get all exercise definitions."""
-    data = _load_json("exercises.json")
-    return data.get("exercises", [])
+    sb = get_supabase_client()
+
+    result = sb.table("exercises") \
+        .select("*") \
+        .order("canonical_name") \
+        .execute()
+
+    # Convert to old format for compatibility
+    exercises = []
+    for row in result.data:
+        exercises.append({
+            "canonical": row["canonical_name"],
+            "variations": row.get("variations", []),
+            "muscle_groups": row.get("muscle_groups", []),
+            "equipment": row.get("equipment", [])
+        })
+
+    return exercises
+
 
 def normalize_exercise_name(name: str) -> str:
     """Convert exercise name to canonical form."""
     exercises = get_all_exercises()
     name_lower = name.lower().strip()
-    
+
     for exercise in exercises:
         if name_lower == exercise.get("canonical", "").lower():
             return exercise["canonical"]
         for variation in exercise.get("variations", []):
             if name_lower == variation.lower():
                 return exercise["canonical"]
-    
+
     # Not found, return as-is with title case
     return name.title()
+
 
 # ============================================================================
 # Weekly Split
@@ -407,12 +457,20 @@ DEFAULT_SPLIT_CONFIG = {
     }
 }
 
+
 def get_weekly_split() -> dict:
     """Get the weekly split configuration and current progress."""
-    data = _load_json("weekly_split.json")
-    
-    # Ensure defaults exist
-    if not data:
+    sb = get_supabase_client()
+
+    # Get the latest weekly split row
+    result = sb.table("weekly_split") \
+        .select("*") \
+        .order("id", desc=True) \
+        .limit(1) \
+        .execute()
+
+    if not result.data:
+        # Initialize with defaults
         data = {
             "config": DEFAULT_SPLIT_CONFIG,
             "current_week": {
@@ -421,36 +479,66 @@ def get_weekly_split() -> dict:
                 "next_in_rotation": "Push"
             }
         }
-        _save_json("weekly_split.json", data)
-    
-    return data
+        # Insert default
+        sb.table("weekly_split").insert(data).execute()
+        return data
+
+    row = result.data[0]
+    return {
+        "config": row["config"],
+        "current_week": row["current_week"]
+    }
+
 
 def update_weekly_split(data: dict) -> None:
     """Update the weekly split data."""
-    _save_json("weekly_split.json", data)
+    sb = get_supabase_client()
 
-def _get_week_start(for_date: date = None) -> date:
+    # Get current row ID
+    current = sb.table("weekly_split") \
+        .select("id") \
+        .order("id", desc=True) \
+        .limit(1) \
+        .execute()
+
+    if current.data:
+        # Update existing row
+        row_id = current.data[0]["id"]
+        sb.table("weekly_split") \
+            .update({
+                "config": data.get("config", DEFAULT_SPLIT_CONFIG),
+                "current_week": data.get("current_week", {})
+            }) \
+            .eq("id", row_id) \
+            .execute()
+    else:
+        # Insert new row
+        sb.table("weekly_split").insert(data).execute()
+
+
+def _get_week_start(for_date: Optional[date] = None) -> date:
     """Get the Monday of the week for a given date."""
     if for_date is None:
         for_date = date.today()
     return for_date - timedelta(days=for_date.weekday())
+
 
 def _update_weekly_split_after_log(log: dict) -> None:
     """Update weekly split tracking after a new log is added."""
     split = get_weekly_split()
     config = split.get("config", DEFAULT_SPLIT_CONFIG)
     current = split.get("current_week", {})
-    
+
     log_date_str = log.get("date")
     if not log_date_str:
         return
-        
+
     log_date = date.fromisoformat(log_date_str)
     log_type = log.get("type")
-    
+
     if not log_type or log_type not in config.get("types", []):
         return
-    
+
     # Check if this is the current week
     week_start = _get_week_start()
     if log_date >= week_start:
@@ -520,7 +608,7 @@ def get_supplementary_status(supplementary_type: str = "abs") -> dict:
     }
 
 
-def can_do_supplementary_today(supplementary_type: str = "abs", target_date: date = None) -> dict:
+def can_do_supplementary_today(supplementary_type: str = "abs", target_date: Optional[date] = None) -> dict:
     """
     Check if supplementary work can be done on a given date based on spacing rules.
 
@@ -565,6 +653,7 @@ def get_workout_count(days: int = 30) -> int:
     logs = get_logs_by_date_range(start, end)
     return len(logs)
 
+
 def get_last_workout(include_deleted: bool = False) -> Optional[dict]:
     """
     Get the most recent workout.
@@ -575,10 +664,23 @@ def get_last_workout(include_deleted: bool = False) -> Optional[dict]:
     Returns:
         Most recent workout log or None if no workouts exist
     """
-    logs = get_all_logs(include_deleted=include_deleted)
-    if not logs:
+    sb = get_supabase_client()
+
+    query = sb.table("workout_logs") \
+        .select("*") \
+        .order("date", desc=True) \
+        .limit(1)
+
+    if not include_deleted:
+        query = query.eq("deleted", False)
+
+    result = query.execute()
+
+    if not result.data:
         return None
-    return max(logs, key=lambda x: x.get("date", ""))
+
+    return result.data[0]
+
 
 def get_exercise_history(exercise_name: str, days: int = 90) -> list:
     """
@@ -598,25 +700,23 @@ def get_exercise_history(exercise_name: str, days: int = 90) -> list:
         # Filter by date range
         end = date.today()
         start = end - timedelta(days=days)
-        logs = get_logs_by_exercise(exercise_name)
+        all_logs = get_logs_by_exercise(exercise_name)
 
-        filtered_logs = []
-        for log in logs:
+        logs = []
+        for log in all_logs:
             log_date_str = log.get("date")
             if not log_date_str:
                 continue
             try:
                 log_date = date.fromisoformat(log_date_str)
                 if log_date >= start:
-                    filtered_logs.append(log)
+                    logs.append(log)
             except ValueError:
                 continue
-        logs = filtered_logs
 
     history = []
 
     for log in sorted(logs, key=lambda x: x.get("date", "")):
-            
         for exercise in log.get("exercises", []):
             if exercise_name.lower() in exercise.get("name", "").lower():
                 sets = exercise.get("sets", [])
@@ -630,5 +730,5 @@ def get_exercise_history(exercise_name: str, days: int = 90) -> list:
                     "max_weight": max_weight,
                     "sets": sets
                 })
-    
+
     return history
