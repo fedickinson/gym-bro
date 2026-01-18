@@ -16,6 +16,7 @@ load_dotenv()
 import streamlit as st
 from src.ui.session import init_session_state, reset_log_workflow
 from src.ui.navigation import render_bottom_nav
+from src.ui.shared_components import render_sidebar
 from src.ui.audio_recorder import combined_input
 from src.agents.log_graph import start_workout_log, continue_workout_log
 from src.tools.recommend_tools import suggest_next_workout, get_workout_template
@@ -43,65 +44,7 @@ render_bottom_nav('Log')
 # ============================================================================
 
 with st.sidebar:
-    st.title("🏋️ Gym Bro")
-    st.caption("AI Fitness Coach")
-
-    st.divider()
-
-    # Quick navigation
-    st.subheader("Quick Links")
-
-    if st.button("🏠 Home", key="sidebar_log_home", use_container_width=True):
-        st.switch_page("app.py")
-
-    if st.button("📅 View History", key="sidebar_log_history", use_container_width=True):
-        st.switch_page("pages/3_History.py")
-
-    if st.button("📊 View Progress", key="sidebar_log_progress", use_container_width=True):
-        st.switch_page("pages/4_Progress.py")
-
-    if st.button("🗑️ View Trash", key="sidebar_log_trash", use_container_width=True):
-        st.switch_page("pages/5_Trash.py")
-
-    st.divider()
-
-    # Quick stats
-    st.subheader("Stats")
-
-    try:
-        from src.data import get_workout_count, get_all_logs
-        from datetime import date, timedelta
-
-        workouts_last_7 = get_workout_count(7)
-        workouts_last_30 = get_workout_count(30)
-
-        st.metric("Last 7 Days", workouts_last_7)
-        st.metric("Last 30 Days", workouts_last_30)
-
-        # Workout streak
-        logs = get_all_logs()
-        if logs:
-            # Calculate streak (consecutive days with workouts)
-            logs_by_date = {}
-            for log in logs:
-                log_date = log.get('date')
-                if log_date:
-                    logs_by_date[log_date] = True
-
-            streak = 0
-            current_date = date.today()
-            while current_date.isoformat() in logs_by_date:
-                streak += 1
-                current_date -= timedelta(days=1)
-
-            if streak > 0:
-                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
-
-    except Exception as e:
-        st.caption("Stats unavailable")
-
-    st.divider()
-    st.caption("Version 1.0.0")
+    render_sidebar(current_page="Log")
 
 # Apply global design system styles
 st.markdown(get_global_styles(), unsafe_allow_html=True)
@@ -110,11 +53,59 @@ st.markdown(get_global_styles(), unsafe_allow_html=True)
 # State Machine Functions
 # ============================================================================
 
+def _render_workout_progress():
+    """
+    Helper function to render workout progress indicator across all states.
+
+    Maps state machine to user-friendly steps:
+    - planning_chat → "Plan"
+    - session_exercise_intro/active → "Exercise N" (where N is current exercise number)
+    - session_workout_review → "Review"
+    - saved → Complete
+    """
+    from src.ui.shared_components import render_workflow_progress
+
+    session = st.session_state.workout_session
+    state = st.session_state.log_state
+
+    # Don't show progress on saved state (shows balloons instead)
+    if state == 'saved':
+        return
+
+    # Build step list based on planned exercises
+    steps = ["Plan"]
+
+    if session and session.get('planned_template'):
+        exercises = session['planned_template'].get('exercises', [])
+        for i in range(len(exercises)):
+            steps.append(f"Ex {i+1}")
+
+    steps.append("Review")
+
+    # Determine current step index
+    if state == 'planning_chat':
+        current_step = 0
+    elif state in ['session_exercise_intro', 'session_active', 'session_exercise_preview']:
+        # Current exercise index
+        current_index = len(session.get('accumulated_exercises', [])) if session else 0
+        current_step = current_index + 1  # +1 because step 0 is "Plan"
+    elif state == 'session_workout_review':
+        current_step = len(steps) - 1  # Last step (Review)
+    else:
+        current_step = 0
+
+    # Render progress indicator (compact labels for mobile)
+    render_workflow_progress(steps, current_step, show_labels=False)
+
+
 def render_planning_chat_state():
     """
     Pre-workout planning with AI chat.
     Shows suggested workout type, adaptive template, and chat interface for modifications.
     """
+    # Show workout progress
+    _render_workout_progress()
+
     st.title("🤖 Plan Your Workout")
 
     # Initialize planning if needed
@@ -125,43 +116,81 @@ def render_planning_chat_state():
 
     session = st.session_state.workout_session
 
-    # === Weekly Progress Summary ===
+    # === Weekly Progress Summary (COMPACT for mobile) ===
     from src.ui.planning_components import render_weekly_progress_summary
-    render_weekly_progress_summary()
+    render_weekly_progress_summary(compact=True)
 
     st.divider()
 
-    # === NEW: Catch-Up Mode Detection ===
-    catch_up_mode = session.get('catch_up_mode', False)
+    # === NEW: Combo Mode Detection ===
+    combo_mode = session.get('combo_mode', False)
+    catch_up_combos = session.get('catch_up_combos', [])
 
-    if catch_up_mode:
+    if combo_mode and catch_up_combos:
+        # COMBO MODE: Show structured combos
         from src.ui.planning_components import render_catch_up_suggestion
+        render_catch_up_suggestion(catch_up_combos)
 
-        catch_up_workouts = session.get('catch_up_workouts', [])
-        days_left = session.get('days_left_in_week', 1)
-        catch_up_count = session.get('catch_up_count', 0)
+        st.divider()
 
-        render_catch_up_suggestion(catch_up_workouts, days_left, catch_up_count)
+        # Show ALL templates for today's combo
+        planned_templates = session.get('planned_templates', [])
+
+        if planned_templates:
+            st.markdown("### 📋 Today's Workouts")
+
+            for i, template_info in enumerate(planned_templates):
+                workout_type = template_info["type"]
+                template = template_info["template"]
+                duration = template_info.get("duration_min", 35)
+
+                with st.expander(
+                    f"**{i+1}. {workout_type}** (~{duration} min)",
+                    expanded=(i == 0)  # First template expanded by default
+                ):
+                    from src.ui.planning_components import render_template_preview
+                    render_template_preview(template, compact=True)
+
+    elif session.get('catch_up_mode', False):
+        # OLD-STYLE CATCH-UP (flat list, no combos) - shouldn't happen with new code
+        from src.ui.planning_components import render_catch_up_suggestion
+        catch_up_combos_fallback = [
+            {
+                "day": "Today",
+                "types": session.get('catch_up_workouts', []),
+                "duration_min": len(session.get('catch_up_workouts', [])) * 35,
+                "rest_between_min": 5
+            }
+        ]
+        render_catch_up_suggestion(catch_up_combos_fallback)
+
+        st.divider()
+
+        # Show single template
+        with st.expander("📋 View Your Plan (tap to expand)", expanded=False):
+            from src.ui.planning_components import render_template_preview
+            render_template_preview(session.get('planned_template', {}), compact=True)
+
     else:
-        # Normal mode - single suggestion
+        # NORMAL MODE - single suggestion
         st.success(f"**Suggested:** {session.get('suggested_type', 'Push')}")
         st.caption(session.get('suggestion_reason', 'Based on your weekly split'))
 
-    st.divider()
+        st.divider()
 
-    # Show current template (collapsible)
-    with st.expander("📋 Your Plan", expanded=True):
-        from src.ui.planning_components import render_template_preview, render_equipment_constraints
-        render_template_preview(session.get('planned_template', {}))
+        # Show current template (collapsible, COLLAPSED by default for mobile)
+        with st.expander("📋 View Your Plan (tap to expand)", expanded=False):
+            from src.ui.planning_components import render_template_preview, render_equipment_constraints
+            render_template_preview(session.get('planned_template', {}), compact=True)
 
-        # Show equipment constraints if any
-        render_equipment_constraints(session.get('equipment_unavailable'))
+            # Show equipment constraints if any
+            render_equipment_constraints(session.get('equipment_unavailable'))
 
-        # Show adjustments made
-        from src.ui.planning_components import render_adjustment_history
-        adjustments = session.get('plan_adjustments', [])
-        if adjustments:
-            render_adjustment_history(adjustments)
+            # Show adjustments made
+            from src.ui.planning_components import render_adjustment_history
+            adjustments = session.get('plan_adjustments', [])
+            if adjustments:
+                render_adjustment_history(adjustments)
 
     # Show AI-generated workout summary (after plan, before modify)
     workout_summary = session.get('workout_summary')
@@ -417,6 +446,9 @@ def render_session_exercise_intro():
     from src.agents.session_graph import generate_next_set_suggestion
     from src.agents.suggestion_engine import get_exercise_info
 
+    # Show workout progress
+    _render_workout_progress()
+
     st.title("💪 Next Exercise")
 
     session = st.session_state.workout_session
@@ -621,6 +653,9 @@ def render_session_active_state():
     from src.ui.session_components import render_session_progress
     from src.ui.suggestion_components import render_next_suggestion
     from src.agents.session_graph import generate_next_set_suggestion
+
+    # Show workout progress
+    _render_workout_progress()
 
     st.title("🎙️ Record Set")
 
@@ -1261,6 +1296,7 @@ def render_session_set_preview():
         ''', unsafe_allow_html=True)
 
         # Quick adjust buttons
+        st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -1290,6 +1326,7 @@ def render_session_set_preview():
                     del st.session_state.rest_duration
                 st.session_state.log_state = 'session_active'
                 st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # Auto-advance when timer expires
         if remaining <= 0:
@@ -1496,6 +1533,7 @@ def render_session_exercise_complete():
         st.progress(progress)
 
         # Quick adjust buttons
+        st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -1548,6 +1586,7 @@ def render_session_exercise_complete():
                 # Move to intro screen for next exercise
                 st.session_state.log_state = 'session_exercise_intro'
                 st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # Auto-advance when timer expires
         if remaining <= 0:
@@ -1782,6 +1821,7 @@ def render_session_exercise_preview():
         st.divider()
         st.markdown("**Adjust rest time:**")
 
+        st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4)
         if col1.button("30s", key="rest_30", use_container_width=True):
             st.session_state.rest_duration = 30
@@ -1799,6 +1839,7 @@ def render_session_exercise_preview():
             # Skip rest and move to next exercise
             _complete_exercise_and_continue(session)
             return
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # Auto-rerun to update timer countdown
         if remaining > 0:
@@ -2504,9 +2545,55 @@ def render_abs_intro():
             st.rerun()
 
 
+def _handle_combo_progression():
+    """
+    Handle progression to next workout in combo.
+
+    After user completes first workout, load next template and continue.
+    """
+    session = st.session_state.workout_session
+
+    if not session.get('combo_mode'):
+        return  # Not in combo mode
+
+    current_idx = session.get('current_template_index', 0)
+    planned_templates = session.get('planned_templates', [])
+
+    if current_idx >= len(planned_templates) - 1:
+        return  # All templates completed
+
+    # Move to next template
+    next_idx = current_idx + 1
+    next_template_info = planned_templates[next_idx]
+    next_type = next_template_info["type"]
+    next_template = next_template_info["template"]
+
+    # Update session for next workout
+    session['current_template_index'] = next_idx
+    session['suggested_type'] = next_type
+    session['actual_workout_type'] = next_type
+    session['planned_template'] = next_template
+    session['accumulated_exercises'] = []  # Reset for new workout
+    session['current_exercise_index'] = 0
+    session['in_progress_exercise'] = None
+    session['current_set_number'] = 1
+
+    # Reset set-by-set tracking
+    session['current_exercise_name'] = None
+    session['current_exercise_sets_completed'] = []
+    session['target_sets'] = 0
+    session['current_set_suggestion'] = None
+
+    st.session_state.workout_session = session
+    st.session_state.log_state = 'session_exercise_intro'
+
+
 def render_session_workout_review():
     """Review full workout before saving."""
     from src.ui.session_components import render_workout_review
+
+    # Show workout progress
+    _render_workout_progress()
 
     # Render review
     session = st.session_state.workout_session
@@ -2551,7 +2638,77 @@ def render_session_workout_review():
 
     st.divider()
 
-    # Save and cancel buttons
+    # NEW: Check for combo mode - prompt for next workout if more templates remaining
+    if session.get('combo_mode'):
+        current_idx = session.get('current_template_index', 0)
+        planned_templates = session.get('planned_templates', [])
+        total_templates = len(planned_templates)
+
+        if current_idx < total_templates - 1:
+            # More workouts in combo!
+            remaining = total_templates - current_idx - 1
+            completed_types = [t["type"] for t in planned_templates[:current_idx + 1]]
+            next_template_info = planned_templates[current_idx + 1]
+            next_type = next_template_info["type"]
+            next_duration = next_template_info.get("duration_min", 35)
+
+            st.warning(f"⚠️ **You have {remaining} more workout(s) in today's combo.**")
+            st.success(f"✅ {' ✅ '.join(completed_types)}")
+            st.info(f"⏭️ **Next:** {next_type} workout (~{next_duration} min)")
+
+            st.divider()
+
+            # Offer two options
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("➡️ Continue to Next", type="primary", use_container_width=True):
+                    # Save current workout first
+                    from src.agents.session_graph import finish_session
+
+                    with st.spinner("Saving workout..."):
+                        final_session = finish_session(session)
+
+                    st.session_state.workout_session = final_session
+
+                    if final_session.get('saved'):
+                        # Progress to next template
+                        _handle_combo_progression()
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {final_session.get('response', 'Failed to save')}")
+
+            with col2:
+                if st.button("✅ Finish for Today", use_container_width=True):
+                    # Save only this workout
+                    from src.agents.session_graph import finish_session
+
+                    with st.spinner("Saving workout..."):
+                        final_session = finish_session(session)
+
+                    st.session_state.workout_session = final_session
+
+                    if final_session.get('saved'):
+                        st.session_state.log_workflow_state = {
+                            'workout_id': final_session.get('workout_id'),
+                            'saved': True
+                        }
+                        st.session_state.log_state = 'saved'
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {final_session.get('response', 'Failed to save')}")
+
+            # Add cancel button below
+            st.divider()
+            if st.button("❌ Cancel Workout", use_container_width=False):
+                from src.ui.session import reset_workout_session
+                reset_workout_session()
+                st.switch_page("app.py")
+
+            # Stop here - don't show normal save button
+            return
+
+    # Normal save buttons (non-combo or last in combo)
     col1, col2 = st.columns([2, 1])
 
     with col1:

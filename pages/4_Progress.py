@@ -11,20 +11,28 @@ Displays 4 chart types:
 import streamlit as st
 from src.ui.session import init_session_state
 from src.ui.navigation import render_bottom_nav
+from src.ui.shared_components import render_sidebar, render_stat_card, render_empty_state
 from src.ui.styles import get_global_styles
 from src.ui.charts import (
     create_exercise_progression_chart,
     create_weekly_split_pie,
     create_volume_trends_chart,
     create_frequency_heatmap,
-    get_unique_exercises
+    get_unique_exercises,
+    get_chart_config
+)
+from src.ui.insights import (
+    generate_exercise_insights,
+    generate_volume_insights,
+    generate_consistency_insights,
+    get_quick_stats
 )
 
 # Page configuration
 st.set_page_config(
     page_title="Progress - Gym Bro",
     page_icon="📊",
-    layout="wide"
+    layout="centered"  # Changed from "wide" for better mobile experience
 )
 
 # Initialize session state
@@ -39,62 +47,7 @@ render_bottom_nav('Progress')
 # ============================================================================
 
 with st.sidebar:
-    st.title("🏋️ Gym Bro")
-    st.caption("AI Fitness Coach")
-
-    st.divider()
-
-    # Quick navigation
-    st.subheader("Quick Links")
-
-    if st.button("🏠 Home", key="sidebar_prog_home", use_container_width=True):
-        st.switch_page("app.py")
-
-    if st.button("📅 View History", key="sidebar_prog_history", use_container_width=True):
-        st.switch_page("pages/3_History.py")
-
-    if st.button("🗑️ View Trash", key="sidebar_prog_trash", use_container_width=True):
-        st.switch_page("pages/5_Trash.py")
-
-    st.divider()
-
-    # Quick stats
-    st.subheader("Stats")
-
-    try:
-        from src.data import get_workout_count, get_all_logs
-        from datetime import date, timedelta
-
-        workouts_last_7 = get_workout_count(7)
-        workouts_last_30 = get_workout_count(30)
-
-        st.metric("Last 7 Days", workouts_last_7)
-        st.metric("Last 30 Days", workouts_last_30)
-
-        # Workout streak
-        logs = get_all_logs()
-        if logs:
-            # Calculate streak (consecutive days with workouts)
-            logs_by_date = {}
-            for log in logs:
-                log_date = log.get('date')
-                if log_date:
-                    logs_by_date[log_date] = True
-
-            streak = 0
-            current_date = date.today()
-            while current_date.isoformat() in logs_by_date:
-                streak += 1
-                current_date -= timedelta(days=1)
-
-            if streak > 0:
-                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
-
-    except Exception as e:
-        st.caption("Stats unavailable")
-
-    st.divider()
-    st.caption("Version 1.0.0")
+    render_sidebar(current_page="Progress")
 
 # Apply global design system styles
 st.markdown(get_global_styles(), unsafe_allow_html=True)
@@ -105,6 +58,44 @@ st.markdown(get_global_styles(), unsafe_allow_html=True)
 
 st.title("📊 Progress Tracking")
 st.caption("Analyze your training trends and performance over time")
+
+# ============================================================================
+# Quick Stats Cards
+# ============================================================================
+
+stats = get_quick_stats()
+
+# Show quick overview if user has data
+if stats['total_workouts'] > 0:
+    st.info(f"📈 You've logged **{stats['total_workouts']} workout{'s' if stats['total_workouts'] != 1 else ''}** total. Track your progress with personalized insights below.")
+
+if stats['total_workouts'] > 0:
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Total Workouts", stats['total_workouts'])
+
+    with col2:
+        streak_label = "Current Streak"
+        if stats['current_streak'] > 0:
+            st.metric(streak_label, f"{stats['current_streak']} days", delta="🔥")
+        else:
+            st.metric(streak_label, "0 days")
+
+    with col3:
+        st.metric("This Month", stats['this_month'])
+
+    st.divider()
+else:
+    render_empty_state(
+        icon="🏋️",
+        title="No Workout Data Yet",
+        message="Start your fitness journey by logging your first workout!",
+        action_text="Log Workout →",
+        action_page="pages/1_Log_Workout.py",
+        size="large"
+    )
+    st.stop()  # Don't show charts if no data
 
 # ============================================================================
 # Exercise Selector
@@ -136,92 +127,154 @@ else:
     with col2:
         time_range = st.selectbox(
             "Time Range",
-            ["30 days", "60 days", "90 days", "6 months", "1 year", "All Time"],
-            index=2 if time_range_used != 0 else 5  # Default: 90 days, or All Time if we fell back
+            ["30d", "60d", "90d", "6mo", "1yr", "All"],
+            index=2 if time_range_used != 0 else 5,  # Default: 90 days, or All Time if we fell back
+            help="Select time period for analysis"
         )
 
     # Convert time range to days
     range_map = {
-        "30 days": 30,
-        "60 days": 60,
-        "90 days": 90,
-        "6 months": 180,
-        "1 year": 365,
-        "All Time": 0  # 0 = all time
+        "30d": 30,
+        "60d": 60,
+        "90d": 90,
+        "6mo": 180,
+        "1yr": 365,
+        "All": 0  # 0 = all time
     }
     days = range_map[time_range]
 
     st.divider()
 
     # ========================================================================
-    # Chart Layout
+    # Exercise Progression Chart with Smart Insights
     # ========================================================================
 
-    # Check if mobile (simplified detection)
-    # On mobile, we'll stack charts vertically
-    # On desktop, we'll use a 2x2 grid
+    st.subheader("💪 Exercise Progression")
+    st.caption("Track strength gains over time with your selected exercise")
 
-    # Row 1: Exercise Progression (full width)
-    st.plotly_chart(
-        create_exercise_progression_chart(selected_exercise, days),
-        use_container_width=True,
-        key="exercise_progression"
-    )
+    # Generate smart insights for this exercise
+    exercise_insights = generate_exercise_insights(selected_exercise, days)
+
+    if not exercise_insights['has_data']:
+        # Data quality warning
+        st.warning(f"⚠️ Insufficient data: Only {exercise_insights['data_points']} workout(s) with {selected_exercise}.")
+        st.info(f"📝 Log {exercise_insights['needed']} more workout(s) with {selected_exercise} to see progression trends")
+
+        render_empty_state(
+            icon="📊",
+            title=f"Not Enough Data for {selected_exercise}",
+            message=f"You need at least 3 workouts to see meaningful trends. You have {exercise_insights['data_points']}.",
+            action_text="Log Workout →",
+            action_page="pages/1_Log_Workout.py"
+        )
+    else:
+        # Show data quality badge
+        quality_badges = {
+            'low': ("🟡", "Limited data - trends may not be accurate"),
+            'moderate': ("🟢", "Moderate data quality"),
+            'good': ("✅", "Excellent data quality")
+        }
+        badge_icon, badge_text = quality_badges.get(exercise_insights['quality'], ("", ""))
+        st.caption(f"{badge_icon} {badge_text} ({exercise_insights['data_points']} data points)")
+
+        # Show the chart (mobile-optimized by default for better phone experience)
+        st.plotly_chart(
+            create_exercise_progression_chart(selected_exercise, days, mobile=True),
+            use_container_width=True,
+            config=get_chart_config(mobile_optimized=True),
+            key="exercise_progression"
+        )
+
+        # Display personalized insights
+        if exercise_insights['insights']:
+            insight_count = len(exercise_insights['insights'])
+            rec_count = len(exercise_insights.get('recommendations', []))
+            total_count = insight_count + rec_count
+
+            with st.expander(f"💡 AI Insights ({total_count} tip{'s' if total_count != 1 else ''}) - Tap to view", expanded=False):
+                for insight in exercise_insights['insights']:
+                    st.markdown(insight)
+
+                if exercise_insights['recommendations']:
+                    st.markdown("**Recommendations:**")
+                    for rec in exercise_insights['recommendations']:
+                        st.markdown(f"- {rec}")
 
     st.divider()
 
-    # Row 2: Weekly Split + Volume Trends (side by side on desktop)
-    col1, col2 = st.columns(2)
+    # ========================================================================
+    # Volume Trends with Smart Insights
+    # ========================================================================
 
-    with col1:
-        st.plotly_chart(
-            create_weekly_split_pie(days=7),
-            use_container_width=True,
-            key="weekly_split"
-        )
+    st.subheader("📈 Training Volume Trends")
+    st.caption("Total weight × reps per week - key indicator of progressive overload")
 
-    with col2:
+    volume_insights = generate_volume_insights(days)
+
+    if volume_insights['has_data']:
         st.plotly_chart(
-            create_volume_trends_chart(days),
+            create_volume_trends_chart(days, mobile=True),
             use_container_width=True,
+            config=get_chart_config(mobile_optimized=True),
             key="volume_trends"
         )
 
-    st.divider()
+        # Display volume insights
+        if volume_insights['insights']:
+            with st.expander("💡 Volume Analysis", expanded=False):
+                for insight in volume_insights['insights']:
+                    st.markdown(insight)
 
-    # Row 3: Frequency Heatmap (full width)
-    st.plotly_chart(
-        create_frequency_heatmap(days),
-        use_container_width=True,
-        key="frequency_heatmap"
-    )
-
-    # ========================================================================
-    # Insights Section
-    # ========================================================================
+                if volume_insights['recommendations']:
+                    st.markdown("**Recommendations:**")
+                    for rec in volume_insights['recommendations']:
+                        st.markdown(f"- {rec}")
 
     st.divider()
-    st.subheader("💡 Insights")
 
-    with st.expander("How to Use These Charts", expanded=False):
-        st.write("""
-        **Exercise Progression:**
-        - Track your max weight over time for any exercise
-        - Look for upward trends indicating strength gains
-        - Plateaus suggest it might be time to adjust your program
+    # ========================================================================
+    # Additional Charts (Progressive Disclosure)
+    # ========================================================================
 
-        **Weekly Split:**
-        - See the balance of workout types this week
-        - Ensure you're hitting your Push/Pull/Legs targets
-        - A balanced split prevents overtraining and injuries
+    with st.expander("📊 More Analytics (2 charts) - Tap to explore", expanded=False):
+        st.markdown("### Weekly Split Balance")
+        st.caption("See the balance of workout types this week")
 
-        **Volume Trends:**
-        - Total weight × reps per week
-        - Rising volume = progressive overload
-        - Dips might indicate recovery weeks or time off
+        st.plotly_chart(
+            create_weekly_split_pie(days=7, mobile=True),
+            use_container_width=True,
+            config=get_chart_config(mobile_optimized=True),
+            key="weekly_split"
+        )
 
-        **Frequency Heatmap:**
-        - Visual of your workout consistency
-        - Green = active training days
-        - Patterns help identify your training rhythm
-        """)
+        st.divider()
+
+        st.markdown("### Workout Frequency Calendar")
+        st.caption("Visual of your workout consistency over time")
+
+        st.plotly_chart(
+            create_frequency_heatmap(days, mobile=True),
+            use_container_width=True,
+            config=get_chart_config(mobile_optimized=True),
+            key="frequency_heatmap"
+        )
+
+    # ========================================================================
+    # Consistency Insights
+    # ========================================================================
+
+    st.divider()
+    st.subheader("⚡ Consistency Insights")
+    st.caption("How you're showing up for your training")
+
+    consistency_insights = generate_consistency_insights(days)
+
+    if consistency_insights['has_data']:
+        # Combine insights into a single compact card
+        insights_text = "\n\n".join([f"• {insight}" for insight in consistency_insights['insights']])
+        st.info(insights_text)
+
+        if consistency_insights['recommendations']:
+            st.warning("**💪 Action Items:**")
+            for rec in consistency_insights['recommendations']:
+                st.markdown(f"- {rec}")

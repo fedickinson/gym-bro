@@ -27,6 +27,10 @@ def get_global_styles():
        ======================================== */
 
     :root {
+        /* Animation & Transitions */
+        --transition-fast: 0.1s ease;
+        --transition-normal: 0.2s ease;
+        --transition-slow: 0.3s ease;
         /* Colors - Primary (Success/Progress) */
         --color-primary-500: #4CAF50;
         --color-primary-600: #45a049;
@@ -42,6 +46,12 @@ def get_global_styles():
         --color-warning: #FFC107;
         --color-error: #F44336;
         --color-info: #2196F3;
+
+        /* Colors - Action-specific (for consistency) */
+        --color-destructive: #d32f2f;        /* Delete buttons */
+        --color-destructive-hover: #b71c1c;  /* Delete button hover */
+        --color-restore: #2e7d32;            /* Restore actions */
+        --color-restore-hover: #1b5e20;      /* Restore hover */
 
         /* Colors - Neutrals (Dark Theme) */
         --color-bg-primary: #0E1117;
@@ -603,6 +613,185 @@ def get_global_styles():
     @media (max-width: 768px) {
         [data-testid="stSidebar"] {
             display: none;
+        }
+    }
+
+    /* ========================================
+       TOUCH INTERACTIONS & MOBILE UX
+       ======================================== */
+
+    /* Better button press states for mobile */
+    button:active {
+        transform: scale(0.98);
+        transition: transform var(--transition-fast);
+    }
+
+    button {
+        transition: all var(--transition-normal);
+    }
+
+    /* Primary buttons get special press feedback */
+    button[kind="primary"]:active {
+        transform: scale(0.97);
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* Larger minimum tap spacing on mobile */
+    @media (max-width: 768px) {
+        .stButton {
+            margin-bottom: var(--space-3) !important;
+        }
+
+        /* Ensure buttons have adequate height */
+        .stButton > button {
+            min-height: 44px !important;
+            padding: 0.5rem 1rem !important;
+        }
+    }
+
+    /* Enhanced focus for accessibility */
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+        outline: 3px solid var(--color-primary-500) !important;
+        outline-offset: 2px !important;
+    }
+
+    /* Remove default focus for mouse users (keeps keyboard focus) */
+    button:focus:not(:focus-visible),
+    input:focus:not(:focus-visible) {
+        outline: none;
+    }
+
+    /* Smooth transitions for interactive elements */
+    .stButton > button,
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > select {
+        transition: all var(--transition-normal);
+    }
+
+    /* Hover states with smooth transitions */
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    /* Mobile: Remove hover effects (no cursor on touch) */
+    @media (hover: none) and (pointer: coarse) {
+        .stButton > button:hover {
+            transform: none;
+            box-shadow: none;
+        }
+    }
+
+    /* Tap highlight color for iOS */
+    button, a, input, textarea {
+        -webkit-tap-highlight-color: rgba(76, 175, 80, 0.2);
+    }
+
+    /* Prevent text selection on buttons (better touch UX) */
+    button {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    /* ========================================
+       MOBILE OPTIMIZATION - COLUMN STACKING
+       ======================================== */
+
+    /* Auto-stack Streamlit columns on mobile (GLOBAL FIX) */
+    @media (max-width: 768px) {
+        [data-testid="column"] {
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+            margin-bottom: var(--space-3);
+        }
+
+        /* Remove bottom margin from last column in a row */
+        [data-testid="column"]:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    /* ========================================
+       MOBILE OPTIMIZATION - SPECIFIC PATTERNS
+       ======================================== */
+
+    /* Action button rows (3-4 column button layouts) */
+    .action-button-row [data-testid="column"] {
+        margin-bottom: var(--space-2) !important;
+    }
+
+    @media (max-width: 768px) {
+        .action-button-row [data-testid="column"] {
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+    }
+
+    /* Checkbox rows (narrow split fix - keep checkbox column at 48px on mobile) */
+    @media (max-width: 768px) {
+        .checkbox-row {
+            display: flex !important;
+            align-items: center !important;
+        }
+
+        .checkbox-row [data-testid="column"]:first-child {
+            min-width: 48px !important;
+            max-width: 48px !important;
+            flex: 0 0 48px !important;
+            margin-bottom: 0 !important;
+        }
+
+        .checkbox-row [data-testid="column"]:not(:first-child) {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            margin-bottom: 0 !important;
+        }
+    }
+
+    /* Expandable row with action button (e.g., History/Trash delete/restore) */
+    @media (max-width: 768px) {
+        .expandable-row-with-action {
+            flex-direction: column !important;
+        }
+
+        .expandable-row-with-action [data-testid="column"] {
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+            margin-bottom: var(--space-2) !important;
+        }
+
+        .expandable-row-with-action [data-testid="column"]:last-child {
+            margin-bottom: 0 !important;
+        }
+    }
+
+    /* Mobile-only filter UI (show on mobile, hide on desktop) */
+    .mobile-filters {
+        display: none;
+    }
+
+    @media (max-width: 768px) {
+        .mobile-filters {
+            display: block;
+            margin-bottom: var(--space-4);
+        }
+    }
+
+    @media (min-width: 769px) {
+        .mobile-filters {
+            display: none !important;
+        }
+    }
+
+    /* Desktop-only content (hide on mobile) */
+    @media (max-width: 768px) {
+        .desktop-only {
+            display: none !important;
         }
     }
 

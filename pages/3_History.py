@@ -8,6 +8,7 @@ import streamlit as st
 from datetime import date, timedelta
 from src.ui.session import init_session_state
 from src.ui.navigation import render_bottom_nav
+from src.ui.shared_components import render_sidebar
 from src.ui.confirmation_dialogs import show_delete_confirmation, show_bulk_delete_confirmation
 from src.data import get_all_logs, get_logs_by_date_range
 from src.ui.styles import get_global_styles
@@ -36,15 +37,15 @@ st.markdown("""
 button[kind="secondary"]:has(p:contains("Delete")),
 button[kind="secondary"]:has(p:contains("🗑️")),
 button:has(p:contains("❌")) {
-    background-color: #d32f2f !important;
+    background-color: var(--color-destructive) !important;
     color: white !important;
-    border: 1px solid #b71c1c !important;
+    border: 1px solid var(--color-destructive-hover) !important;
 }
 
 button[kind="secondary"]:has(p:contains("Delete")):hover,
 button[kind="secondary"]:has(p:contains("🗑️")):hover,
 button:has(p:contains("❌")):hover {
-    background-color: #b71c1c !important;
+    background-color: var(--color-destructive-hover) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -60,59 +61,7 @@ st.title("📅 Workout History")
 # ============================================================================
 
 with st.sidebar:
-    st.title("🏋️ Gym Bro")
-    st.caption("AI Fitness Coach")
-
-    st.divider()
-
-    # Quick navigation
-    st.subheader("Quick Links")
-
-    if st.button("🏠 Home", key="sidebar_hist_home", use_container_width=True):
-        st.switch_page("app.py")
-
-    if st.button("📊 View Progress", key="sidebar_hist_progress", use_container_width=True):
-        st.switch_page("pages/4_Progress.py")
-
-    if st.button("🗑️ View Trash", key="sidebar_hist_trash", use_container_width=True):
-        st.switch_page("pages/5_Trash.py")
-
-    st.divider()
-
-    # Quick stats
-    st.subheader("Stats")
-
-    try:
-        from src.data import get_workout_count, get_all_logs
-        from datetime import date, timedelta
-
-        workouts_last_7 = get_workout_count(7)
-        workouts_last_30 = get_workout_count(30)
-
-        st.metric("Last 7 Days", workouts_last_7)
-        st.metric("Last 30 Days", workouts_last_30)
-
-        # Workout streak
-        logs = get_all_logs()
-        if logs:
-            # Calculate streak (consecutive days with workouts)
-            logs_by_date = {}
-            for log in logs:
-                log_date = log.get('date')
-                if log_date:
-                    logs_by_date[log_date] = True
-
-            streak = 0
-            current_date = date.today()
-            while current_date.isoformat() in logs_by_date:
-                streak += 1
-                current_date -= timedelta(days=1)
-
-            if streak > 0:
-                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
-
-    except Exception as e:
-        st.caption("Stats unavailable")
+    render_sidebar(current_page="History")
 
     st.divider()
 
@@ -121,7 +70,7 @@ with st.sidebar:
 
     # Workout type filter
     workout_types = ['All', 'Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Other']
-    selected_type = st.selectbox("Workout Type", workout_types)
+    selected_type = st.selectbox("Workout Type", workout_types, key="sidebar_type")
 
     # Date range filter
     date_range_options = {
@@ -134,11 +83,11 @@ with st.sidebar:
         'This year': 365,
         'All time': 0
     }
-    selected_range = st.selectbox("Date Range", list(date_range_options.keys()), index=4)  # Default: Last 3 months
+    selected_range = st.selectbox("Date Range", list(date_range_options.keys()), index=4, key="sidebar_range")  # Default: Last 3 months
     days = date_range_options[selected_range]
 
     # Exercise search
-    search_exercise = st.text_input("Search Exercise", placeholder="e.g., bench press")
+    search_exercise = st.text_input("Search Exercise", placeholder="e.g., bench press", key="sidebar_search")
 
     st.divider()
 
@@ -148,6 +97,29 @@ with st.sidebar:
 
     st.divider()
     st.caption("Version 1.0.0")
+
+# ============================================================================
+# Mobile Filters (shown on mobile, hidden on desktop)
+# ============================================================================
+
+st.markdown('<div class="mobile-filters">', unsafe_allow_html=True)
+with st.expander("🔍 Filters", expanded=False):
+    # Workout type filter
+    mobile_type = st.selectbox("Workout Type", workout_types, key="mobile_type")
+
+    # Date range filter
+    mobile_range = st.selectbox("Date Range", list(date_range_options.keys()), index=4, key="mobile_range")
+
+    # Exercise search
+    mobile_search = st.text_input("Search Exercise", placeholder="e.g., bench press", key="mobile_search")
+
+    # Use mobile filter values if on mobile
+    if 'mobile_type' in st.session_state:
+        selected_type = mobile_type
+        days = date_range_options[mobile_range]
+        search_exercise = mobile_search
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================================
 # Apply Filters
@@ -189,6 +161,7 @@ try:
         # ====================================================================
 
         # Action buttons row
+        st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
 
         with col1:
@@ -209,6 +182,7 @@ try:
                     selected_workouts = [log for log in logs if log.get('id') in st.session_state.selected_workout_ids]
                     # Show bulk confirmation dialog
                     show_bulk_delete_confirmation(selected_workouts, on_confirm_callback=lambda: st.session_state.selected_workout_ids.clear())
+        st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
         # Display most recent first
@@ -220,6 +194,7 @@ try:
             workout_id = log.get('id', '')
 
             # Checkbox and expander
+            st.markdown('<div class="checkbox-row">', unsafe_allow_html=True)
             col_check, col_expand = st.columns([0.1, 0.9])
 
             with col_check:
@@ -329,6 +304,8 @@ try:
 
                     with col2:
                         st.caption(f"ID: {workout_id}")
+
+            st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
     st.error(f"Error loading workouts: {str(e)}")

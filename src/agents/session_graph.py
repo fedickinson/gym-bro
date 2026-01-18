@@ -106,6 +106,13 @@ class SessionWithPlanState(TypedDict):
     plan_adjustments: list[dict]  # Chat-based modifications
     # [{timestamp, user_message, ai_response, template_change}]
 
+    # NEW: Multi-template support for combo workouts
+    planned_templates: list[dict] | None  # Multiple templates for combos
+    # [{"type": "Legs", "template": {...}, "duration_min": 35}, ...]
+    current_template_index: int  # Which template user is logging (0-based)
+    combo_mode: bool  # True when logging a combo workout
+    combo_info: dict | None  # {"day": "Today", "types": ["Legs", "Upper"], ...}
+
     # Equipment constraints
     equipment_available: list[str] | None  # ["dumbbells", "cables", "barbell"]
     equipment_unavailable: list[str] | None  # ["smith machine"]
@@ -407,11 +414,82 @@ def initialize_planning(state: SessionWithPlanState) -> SessionWithPlanState:
         # NEW: Check if catch-up mode triggered
         catch_up_mode = suggestion.get("catch_up_mode", False)
         express_recommended = suggestion.get("express_recommended", False)
+        catch_up_combos = suggestion.get("catch_up_combos", [])
 
         # Generate template (Express or Adaptive)
         import streamlit as st
-        if catch_up_mode and express_recommended and st.session_state.get('use_express_mode', True):
-            # Catch-up mode with Express enabled
+
+        # NEW: Check for combo mode
+        if catch_up_mode and catch_up_combos and st.session_state.get('use_express_mode', True):
+            # COMBO MODE: Generate templates for ALL types in today's combo
+            from src.agents.template_generator import generate_express_template
+
+            today_combo = catch_up_combos[0]
+            combo_types = today_combo["types"]
+
+            planned_templates = []
+
+            for workout_type in combo_types:
+                # Generate Express template for each type
+                base_template_result = get_workout_template.invoke({
+                    "workout_type": workout_type,
+                    "adaptive": True
+                })
+
+                if base_template_result.get("found"):
+                    express_template = generate_express_template(
+                        workout_type,
+                        base_template_result
+                    )
+                    planned_templates.append({
+                        "type": workout_type,
+                        "template": express_template,
+                        "duration_min": express_template.get("estimated_duration_min", 35)
+                    })
+                    print(f"✨ Generated Express template for {workout_type} ({len(express_template.get('exercises', []))} exercises)")
+                else:
+                    # Fallback if no base template
+                    express_template = generate_express_template(workout_type)
+                    planned_templates.append({
+                        "type": workout_type,
+                        "template": express_template,
+                        "duration_min": 35
+                    })
+                    print(f"✨ Generated Express template (no base) for {workout_type}")
+
+            # Use first template for backward compatibility
+            template = planned_templates[0]["template"] if planned_templates else {}
+
+            # Initialize planning state with combo info
+            now = datetime.now().isoformat()
+
+            return {
+                **state,
+                "started_at": now,
+                "last_activity_at": now,
+                "suggested_type": combo_types[0],  # First type in combo
+                "suggestion_reason": reason,
+                "planned_template": template,  # For backward compat
+                "planned_templates": planned_templates,  # NEW: All templates
+                "current_template_index": 0,
+                "combo_mode": True,
+                "combo_info": today_combo,
+                "actual_workout_type": combo_types[0],
+                "plan_adjustments": [],
+                "equipment_available": None,
+                "equipment_unavailable": None,
+                "current_exercise_index": 0,
+                "response": f"Combo workout: {' + '.join(combo_types)}",
+                # Catch-up mode fields
+                "catch_up_mode": catch_up_mode,
+                "catch_up_combos": catch_up_combos,  # NEW
+                "catch_up_workouts": suggestion.get("catch_up_workouts", []),
+                "catch_up_count": suggestion.get("catch_up_count", 0),
+                "days_left_in_week": suggestion.get("days_left_in_week", 7)
+            }
+
+        elif catch_up_mode and express_recommended and st.session_state.get('use_express_mode', True):
+            # Single Express template (non-combo catch-up)
             from src.agents.template_generator import generate_express_template
 
             # Get base adaptive template first
@@ -469,8 +547,14 @@ def initialize_planning(state: SessionWithPlanState) -> SessionWithPlanState:
             "equipment_unavailable": None,
             "current_exercise_index": 0,
             "response": f"AI suggests {suggested_type} workout today",
-            # NEW: Catch-up mode fields
+            # NEW: Combo mode fields (default to None/False for normal mode)
+            "planned_templates": None,
+            "current_template_index": 0,
+            "combo_mode": False,
+            "combo_info": None,
+            # Catch-up mode fields
             "catch_up_mode": catch_up_mode,
+            "catch_up_combos": catch_up_combos,  # NEW
             "catch_up_workouts": suggestion.get("catch_up_workouts", []),
             "catch_up_count": suggestion.get("catch_up_count", 0),
             "days_left_in_week": suggestion.get("days_left_in_week", 7)

@@ -10,14 +10,99 @@ from datetime import date, timedelta
 from src.data import get_exercise_history, get_logs_by_date_range, get_all_logs
 import pandas as pd
 
+# Design System Colors (matching src/ui/styles.py)
+# Plotly doesn't support CSS variables, so we define constants here
+COLORS = {
+    'primary': '#4CAF50',
+    'primary_dark': '#45a049',
+    'accent': '#66BB6A',
+    'warning': '#FFC107',
+    'error': '#F44336',
+    'info': '#2196F3',
+    'bg_primary': '#0E1117',
+    'bg_secondary': '#1E1E1E',
+    'bg_tertiary': '#2A2A2A',
+    'text_primary': '#FAFAFA',
+    'text_secondary': '#B0B0B0',
+    'border': '#3A3A3A',
+    'restore': '#2e7d32',
+    'restore_light': '#81C784',
+}
 
-def create_exercise_progression_chart(exercise: str, days: int = 90) -> go.Figure:
+# Responsive chart configuration
+def get_chart_config(mobile_optimized: bool = True) -> dict:
+    """
+    Get Plotly configuration for mobile or desktop.
+
+    Args:
+        mobile_optimized: If True, hide toolbar and optimize for touch
+
+    Returns:
+        dict: Plotly config object
+    """
+    if mobile_optimized:
+        return {
+            'displayModeBar': False,  # Hide toolbar on mobile
+            'doubleClick': 'reset',
+            'scrollZoom': False,
+            'responsive': True
+        }
+    else:
+        return {
+            'displayModeBar': True,
+            'displaylogo': False,
+            'responsive': True
+        }
+
+def get_mobile_layout_settings() -> dict:
+    """
+    Get mobile-optimized layout settings for Plotly charts.
+
+    Mobile optimizations:
+    - Reduced height (250px) for less scrolling
+    - Tighter margins to maximize chart area
+    - Smaller font size for better space utilization
+    - Compact legends with horizontal orientation
+
+    Returns:
+        dict: Layout settings for mobile
+    """
+    return {
+        'font': {'size': 8, 'color': COLORS['text_primary']},
+        'margin': {'l': 20, 'r': 5, 't': 40, 'b': 30},
+        'height': 250,  # Reduced from 300px for less scrolling
+        'legend': {
+            'orientation': 'h',  # Horizontal legend
+            'yanchor': 'bottom',
+            'y': -0.3,
+            'xanchor': 'center',
+            'x': 0.5,
+            'font': {'size': 8}
+        }
+    }
+
+def get_desktop_layout_settings() -> dict:
+    """
+    Get desktop-optimized layout settings for Plotly charts.
+
+    Returns:
+        dict: Layout settings for desktop
+    """
+    return {
+        'font': {'size': 12, 'color': COLORS['text_primary']},
+        'margin': {'l': 40, 'r': 20, 't': 60, 'b': 40},
+        'height': 400,
+    }
+
+
+def create_exercise_progression_chart(exercise: str, days: int = 90, mobile: bool = False) -> go.Figure:
     """
     Create a line chart showing weight progression for an exercise over time.
 
     Args:
         exercise: Exercise name (e.g., "Bench Press")
         days: Number of days to look back
+        mobile: If True, optimize for mobile viewing
 
     Returns:
         Plotly figure object
@@ -32,13 +117,13 @@ def create_exercise_progression_chart(exercise: str, days: int = 90) -> go.Figur
             xref="paper", yref="paper",
             x=0.5, y=0.5,
             showarrow=False,
-            font=dict(size=14, color="#888")
+            font=dict(size=14, color=COLORS['text_secondary'])
         )
         fig.update_layout(
             template='plotly_dark',
             height=400,
-            paper_bgcolor='#0E1117',
-            plot_bgcolor='#1E1E1E'
+            paper_bgcolor=COLORS['bg_primary'],
+            plot_bgcolor=COLORS['bg_secondary']
         )
         return fig
 
@@ -54,10 +139,10 @@ def create_exercise_progression_chart(exercise: str, days: int = 90) -> go.Figur
         y=max_weights,
         mode='lines+markers',
         name='Max Weight',
-        line=dict(color='#4CAF50', width=3),
+        line=dict(color=COLORS['primary'], width=3),
         marker=dict(
             size=10,
-            color='#4CAF50',
+            color=COLORS['primary'],
             line=dict(color='white', width=1)
         ),
         hovertemplate='<b>%{x}</b><br>Max Weight: %{y} lbs<extra></extra>'
@@ -74,34 +159,36 @@ def create_exercise_progression_chart(exercise: str, days: int = 90) -> go.Figur
             xref="paper", yref="paper",
             x=0.02, y=0.98,
             showarrow=False,
-            font=dict(size=12, color='#4CAF50' if improvement >= 0 else '#e74c3c'),
+            font=dict(size=12, color=COLORS['primary'] if improvement >= 0 else COLORS['error']),
             align="left",
             bgcolor='rgba(30,30,30,0.8)',
             borderpad=4
         )
 
+    # Get responsive settings
+    layout_settings = get_mobile_layout_settings() if mobile else get_desktop_layout_settings()
+
     fig.update_layout(
         title=f"{exercise} Progression",
-        xaxis_title="Date",
-        yaxis_title="Weight (lbs)",
+        xaxis_title="" if mobile else "Date",  # Hide axis title on mobile to save space
+        yaxis_title="lbs" if mobile else "Weight (lbs)",  # Shorter label on mobile
         template='plotly_dark',
-        height=400,
         hovermode='x unified',
-        paper_bgcolor='#0E1117',
-        plot_bgcolor='#1E1E1E',
-        font=dict(color='#FAFAFA'),
-        margin=dict(l=40, r=20, t=60, b=40)
+        paper_bgcolor=COLORS['bg_primary'],
+        plot_bgcolor=COLORS['bg_secondary'],
+        **layout_settings
     )
 
     return fig
 
 
-def create_weekly_split_pie(days: int = 7) -> go.Figure:
+def create_weekly_split_pie(days: int = 7, mobile: bool = False) -> go.Figure:
     """
     Create a pie chart showing workout type distribution for the current week.
 
     Args:
         days: Number of days to look back (default: 7 for current week)
+        mobile: If True, optimize for mobile viewing
 
     Returns:
         Plotly figure object
@@ -124,13 +211,13 @@ def create_weekly_split_pie(days: int = 7) -> go.Figure:
             xref="paper", yref="paper",
             x=0.5, y=0.5,
             showarrow=False,
-            font=dict(size=14, color="#888")
+            font=dict(size=14, color=COLORS['text_secondary'])
         )
         fig.update_layout(
             template='plotly_dark',
             height=400,
-            paper_bgcolor='#0E1117',
-            plot_bgcolor='#1E1E1E'
+            paper_bgcolor=COLORS['bg_primary'],
+            plot_bgcolor=COLORS['bg_secondary']
         )
         return fig
 
@@ -140,40 +227,43 @@ def create_weekly_split_pie(days: int = 7) -> go.Figure:
         values=list(counts.values()),
         hole=0.3,  # Donut chart
         marker=dict(
-            colors=['#4CAF50', '#2196F3', '#FFC107', '#FF5722', '#9C27B0'],
-            line=dict(color='#0E1117', width=2)
+            colors=[COLORS['primary'], COLORS['info'], COLORS['warning'], '#FF5722', '#9C27B0'],
+            line=dict(color=COLORS['bg_primary'], width=2)
         ),
         textinfo='label+percent',
         textfont=dict(size=14, color='white'),
         hovertemplate='<b>%{label}</b><br>%{value} workouts<br>%{percent}<extra></extra>'
     )])
 
+    # Get responsive settings
+    layout_settings = get_mobile_layout_settings() if mobile else get_desktop_layout_settings()
+
     fig.update_layout(
         title="This Week's Workout Split",
         template='plotly_dark',
-        height=400,
-        paper_bgcolor='#0E1117',
-        plot_bgcolor='#1E1E1E',
-        font=dict(color='#FAFAFA'),
+        paper_bgcolor=COLORS['bg_primary'],
+        plot_bgcolor=COLORS['bg_secondary'],
         showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.2,
+            y=-0.2 if not mobile else -0.15,
             xanchor="center",
             x=0.5
-        )
+        ),
+        **layout_settings
     )
 
     return fig
 
 
-def create_volume_trends_chart(days: int = 90) -> go.Figure:
+def create_volume_trends_chart(days: int = 90, mobile: bool = False) -> go.Figure:
     """
     Create a bar chart showing total training volume (weight × reps) per week.
 
     Args:
         days: Number of days to look back (0 = all time)
+        mobile: If True, optimize for mobile viewing
 
     Returns:
         Plotly figure object
@@ -218,13 +308,13 @@ def create_volume_trends_chart(days: int = 90) -> go.Figure:
             xref="paper", yref="paper",
             x=0.5, y=0.5,
             showarrow=False,
-            font=dict(size=14, color="#888")
+            font=dict(size=14, color=COLORS['text_secondary'])
         )
         fig.update_layout(
             template='plotly_dark',
             height=400,
-            paper_bgcolor='#0E1117',
-            plot_bgcolor='#1E1E1E'
+            paper_bgcolor=COLORS['bg_primary'],
+            plot_bgcolor=COLORS['bg_secondary']
         )
         return fig
 
@@ -240,8 +330,8 @@ def create_volume_trends_chart(days: int = 90) -> go.Figure:
         x=df['Week'],
         y=df['Volume'],
         marker=dict(
-            color='#4CAF50',
-            line=dict(color='#45a049', width=1)
+            color=COLORS['primary'],
+            line=dict(color=COLORS['primary_dark'], width=1)
         ),
         hovertemplate='Week of %{x}<br>Volume: %{y:,.0f} lbs<extra></extra>'
     )])
@@ -256,28 +346,30 @@ def create_volume_trends_chart(days: int = 90) -> go.Figure:
         annotation_position="top left"
     )
 
+    # Get responsive settings
+    layout_settings = get_mobile_layout_settings() if mobile else get_desktop_layout_settings()
+
     fig.update_layout(
         title="Weekly Training Volume",
-        xaxis_title="Week",
-        yaxis_title="Total Volume (lbs)",
+        xaxis_title="" if mobile else "Week",  # Hide axis title on mobile
+        yaxis_title="lbs" if mobile else "Total Volume (lbs)",  # Shorter label on mobile
         template='plotly_dark',
-        height=400,
-        paper_bgcolor='#0E1117',
-        plot_bgcolor='#1E1E1E',
-        font=dict(color='#FAFAFA'),
+        paper_bgcolor=COLORS['bg_primary'],
+        plot_bgcolor=COLORS['bg_secondary'],
         hovermode='x unified',
-        margin=dict(l=60, r=20, t=60, b=40)
+        **layout_settings
     )
 
     return fig
 
 
-def create_frequency_heatmap(days: int = 90) -> go.Figure:
+def create_frequency_heatmap(days: int = 90, mobile: bool = False) -> go.Figure:
     """
     Create a calendar heatmap showing workout frequency over time.
 
     Args:
         days: Number of days to look back (0 = all time)
+        mobile: If True, optimize for mobile viewing
 
     Returns:
         Plotly figure object
@@ -350,10 +442,10 @@ def create_frequency_heatmap(days: int = 90) -> go.Figure:
         y=week_labels,
         x=['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         colorscale=[
-            [0, '#1E1E1E'],      # No workout
-            [0.33, '#2E7D32'],   # 1 workout
-            [0.66, '#4CAF50'],   # 2 workouts
-            [1, '#81C784']       # 3+ workouts
+            [0, COLORS['bg_secondary']],      # No workout
+            [0.33, COLORS['restore']],   # 1 workout
+            [0.66, COLORS['primary']],   # 2 workouts
+            [1, COLORS['restore_light']]       # 3+ workouts
         ],
         showscale=True,
         colorbar=dict(
@@ -365,14 +457,15 @@ def create_frequency_heatmap(days: int = 90) -> go.Figure:
         hovertemplate='%{y}<br>%{x}<br>Workouts: %{z}<extra></extra>'
     ))
 
+    # Use compact layout for heatmap (works well on both mobile and desktop)
     fig.update_layout(
         title="Workout Frequency Calendar",
         template='plotly_dark',
-        height=300,
-        paper_bgcolor='#0E1117',
-        plot_bgcolor='#1E1E1E',
-        font=dict(color='#FAFAFA'),
-        margin=dict(l=100, r=20, t=60, b=40),
+        height=280 if mobile else 300,
+        paper_bgcolor=COLORS['bg_primary'],
+        plot_bgcolor=COLORS['bg_secondary'],
+        font=dict(size=9 if mobile else 10, color=COLORS['text_primary']),
+        margin=dict(l=80 if mobile else 100, r=10 if mobile else 20, t=40 if mobile else 60, b=30 if mobile else 40),
         yaxis=dict(autorange='reversed')  # Most recent at top
     )
 

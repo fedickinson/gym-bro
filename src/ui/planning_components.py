@@ -11,45 +11,78 @@ import streamlit as st
 from datetime import datetime
 
 
-def render_template_preview(template: dict):
+def render_template_preview(template: dict, compact: bool = False):
     """
     Render a workout template preview with exercises and details.
 
+    NEW: Compact mode hides verbose AI rationale by default for mobile.
+
     Args:
         template: Template dict with exercises, coaching notes, etc.
+        compact: If True, show abbreviated version with collapsed details
     """
     if not template or not template.get('exercises'):
         st.warning("No template loaded")
         return
 
-    # Display exercises
-    st.subheader(f"{template.get('type', 'Unknown')} Workout")
-    st.caption(f"{len(template['exercises'])} exercises")
+    # Display workout type and count
+    st.subheader(f"💪 {template.get('type', 'Unknown')} Workout")
 
-    # Show coaching notes if any (simplified)
-    coaching_notes = template.get('coaching_notes', [])
-    if coaching_notes:
-        for note in coaching_notes:
-            st.info(f"💡 {note}")
+    # Show estimated duration if available
+    duration = template.get('estimated_duration_min')
+    if duration:
+        st.caption(f"{len(template['exercises'])} exercises • ~{duration} min")
+    else:
+        st.caption(f"{len(template['exercises'])} exercises")
 
-    for i, ex in enumerate(template['exercises'], 1):
-        # Expand first exercise by default to show weights clearly
-        expanded = (i == 1)
+    if compact:
+        # COMPACT MODE: Show exercise name, sets×reps @ weight on one line
+        # Hide AI rationale in collapsed expander
+        for i, ex in enumerate(template['exercises'], 1):
+            sets = ex.get('target_sets', 3)
+            reps = ex.get('target_reps', 10)
+            weight = ex.get('suggested_weight_lbs')
 
-        with st.expander(f"**{i}. {ex.get('name')}**", expanded=expanded):
-            col1, col2 = st.columns(2)
+            # Format: "1. Squat - 3×8 @ 185 lbs"
+            exercise_line = f"**{i}. {ex.get('name')}** - {sets}×{reps}"
+            if weight:
+                exercise_line += f" @ {weight:.0f} lbs"
 
-            with col1:
-                target_sets = ex.get('target_sets', 3)
-                target_reps = ex.get('target_reps', 10)
-                st.metric("Sets × Reps", f"{target_sets} × {target_reps}")
+            st.markdown(exercise_line)
 
-            with col2:
-                suggested_weight = ex.get('suggested_weight_lbs')
-                if suggested_weight:
-                    st.metric("Suggested Weight", f"{suggested_weight:.0f} lbs")
-                else:
-                    st.metric("Weight", "Your choice")
+            # NEW: Collapsible details for rationale
+            reasoning = ex.get('reasoning', '')
+            if reasoning:
+                with st.expander("💡 View details", expanded=False):
+                    st.caption(reasoning)
+
+        st.caption("👆 You can modify these via chat below")
+    else:
+        # Full mode: Show coaching notes and expandable exercises
+        # Show coaching notes if any (simplified)
+        coaching_notes = template.get('coaching_notes', [])
+        if coaching_notes:
+            for note in coaching_notes:
+                st.info(f"💡 {note}")
+
+        for i, ex in enumerate(template['exercises'], 1):
+            # Expand first exercise by default to show weights clearly
+            expanded = (i == 1)
+
+            with st.expander(f"**{i}. {ex.get('name')}**", expanded=expanded):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    target_sets = ex.get('target_sets', 3)
+                    target_reps = ex.get('target_reps', 10)
+                    st.metric("Sets × Reps", f"{target_sets} × {target_reps}")
+
+                with col2:
+                    suggested_weight = ex.get('suggested_weight_lbs')
+                    if suggested_weight:
+                        st.metric("Suggested Weight", f"{suggested_weight:.0f} lbs")
+                    else:
+                        st.metric("Weight", "Your choice")
 
 
 def render_adjustment_history(adjustments: list[dict]):
@@ -241,13 +274,16 @@ def _render_workout_type_card(
     st.markdown("")  # Spacing
 
 
-def render_weekly_progress_summary():
+def render_weekly_progress_summary(compact: bool = False):
     """
     Render comprehensive weekly workout progress summary.
 
+    Args:
+        compact: If True, show abbreviated version (mobile-friendly)
+
     Shows:
     - Overall week completion percentage
-    - Progress bars for each workout type
+    - Progress bars for each workout type (collapsed in compact mode)
     - Days since last workout of each type
     - Days remaining in week
     """
@@ -266,16 +302,16 @@ def render_weekly_progress_summary():
     total_target = sum(targets.values())
     overall_percent = (total_completed / total_target) if total_target > 0 else 0
 
-    # --- Overall Summary ---
+    # --- Overall Summary (ALWAYS SHOWN) ---
     st.markdown("### 📅 This Week")
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
         st.metric(
-            "Week Progress",
-            f"{total_completed}/{total_target} workouts",
-            delta=f"{int(overall_percent * 100)}% complete"
+            "Progress",
+            f"{total_completed}/{total_target}",
+            delta=f"{int(overall_percent * 100)}%"
         )
 
     with col2:
@@ -284,24 +320,35 @@ def render_weekly_progress_summary():
         if days_left == 1:
             days_label = "Last day!"
         elif days_left == 0:
-            days_label = "Week ends today"
+            days_label = "Week ends"
         else:
             days_label = f"{days_left} days"
 
         st.metric(
-            "Days Left",
-            days_label,
-            delta=f"{total_remaining} to go"
+            "Remaining",
+            f"{total_remaining} to go",
+            delta=days_label
         )
 
     # Overall progress bar (cap at 100% if over target)
     st.progress(min(overall_percent, 1.0))
 
-    st.divider()
+    # --- Workout Type Progress (COLLAPSED IN COMPACT MODE) ---
+    if compact:
+        # Compact mode: Show details in expander
+        with st.expander("📋 View detailed breakdown by workout type", expanded=False):
+            _render_workout_type_details(completed, targets, remaining, days_left)
+    else:
+        # Full mode: Show details inline
+        st.divider()
+        st.markdown("#### Workout Types")
+        _render_workout_type_details(completed, targets, remaining, days_left)
 
-    # --- Workout Type Progress ---
-    st.markdown("#### Workout Types")
 
+def _render_workout_type_details(completed, targets, remaining, days_left):
+    """
+    Helper to render workout type details (used by both compact and full modes).
+    """
     # Define workout types order
     workout_types = ["Push", "Pull", "Legs", "Upper", "Lower"]
 
@@ -348,44 +395,53 @@ def render_weekly_progress_summary():
 # Catch-Up Mode Components
 # ============================================================================
 
-def render_catch_up_suggestion(catch_up_workouts: list[str], days_left: int, total_needed: int):
+def render_catch_up_suggestion(catch_up_combos: list[dict]):
     """
-    Render catch-up mode UI when multiple workouts needed in limited time.
+    Render catch-up mode UI with smart workout combos.
 
-    Shows:
-    - Alert that user is in catch-up mode
-    - All needed workout types as cards
-    - Express version toggle
-    - Time estimates
-    - Recommended approach
+    NEW: Shows workouts grouped by day (e.g., "Today: Legs + Upper (70 min)").
 
     Args:
-        catch_up_workouts: List of workout types needed (e.g., ["Upper", "Lower"])
-        days_left: Days remaining in the week
-        total_needed: Total number of workouts needed
+        catch_up_combos: List of combo dicts from suggest_next_workout()
+            [
+                {
+                    "day": "Today",
+                    "types": ["Legs", "Upper"],
+                    "duration_min": 70,
+                    "rest_between_min": 5
+                },
+                ...
+            ]
     """
+    if not catch_up_combos:
+        return
+
+    total_workouts = sum(len(combo["types"]) for combo in catch_up_combos)
+    days_needed = len(catch_up_combos)
+
     # Alert banner
-    st.error(f"⚡ **Catch-Up Mode:** {total_needed} workouts needed in {days_left} day(s)!")
+    st.error(f"⚡ **Catch-Up Mode:** {total_workouts} workouts in {days_needed} day(s)!")
 
-    st.markdown("**Today's recommended workouts:**")
+    st.markdown("**Recommended Schedule:**")
 
-    # Show all needed workouts as cards
-    cols = st.columns(len(catch_up_workouts))
+    # Show each day's combo
+    for combo in catch_up_combos:
+        day = combo["day"]
+        types = combo["types"]
+        duration = combo["duration_min"]
 
-    for i, workout_type in enumerate(catch_up_workouts):
-        with cols[i]:
-            # Card for each needed workout
-            st.info(f"**{workout_type}**")
+        # Format: "Today: Legs + Upper (70 min)"
+        combo_label = " + ".join(types)
 
-            # Time estimate (Express vs Full)
-            if st.session_state.get('use_express_mode', True):
-                st.caption("~35 min (Express)")
-            else:
-                st.caption("~50 min (Full)")
+        # Card for this day's combo
+        if day == "Today":
+            st.info(f"**{day}**: {combo_label} (~{duration} min)")
+        else:
+            st.caption(f"{day}: {combo_label} (~{duration} min)")
 
     st.divider()
 
-    # Express mode toggle
+    # Express mode toggle (applies to all combos)
     express_mode = st.checkbox(
         "Use Express versions (shorter workouts)",
         value=True,
@@ -393,29 +449,24 @@ def render_catch_up_suggestion(catch_up_workouts: list[str], days_left: int, tot
         help="Express versions keep compound lifts but reduce volume by ~40%"
     )
 
-    if express_mode:
-        total_time = len(catch_up_workouts) * 35
-        st.caption(f"💡 Total time estimate: ~{total_time} minutes")
-    else:
-        total_time = len(catch_up_workouts) * 50
-        st.caption(f"⏱️ Total time estimate: ~{total_time} minutes")
-
-    # Store express mode preference
     st.session_state.use_express_mode = express_mode
 
-    # Recommended approach
-    if len(catch_up_workouts) == 1:
-        st.info(
-            f"💪 **Suggested approach:** Complete {catch_up_workouts[0]} to finish your week strong!"
-        )
-    elif len(catch_up_workouts) == 2:
-        st.info(
-            f"💪 **Suggested approach:** Complete {catch_up_workouts[0]} first, "
-            f"then immediately log {catch_up_workouts[1]} to finish your week strong!"
-        )
+    # Total time for today's combo
+    today_combo = catch_up_combos[0]
+    today_types = today_combo["types"]
+
+    if express_mode:
+        total_time = today_combo["duration_min"]
+        st.caption(f"💡 **Today's total time:** ~{total_time} minutes")
     else:
-        remaining_workouts = ' and '.join(catch_up_workouts[1:])
+        full_time = len(today_types) * 50
+        st.caption(f"⏱️ **Today's total time:** ~{full_time} minutes")
+
+    # Suggested approach
+    if len(today_types) == 1:
+        st.info(f"💪 **Start with {today_types[0]}** to get back on track!")
+    else:
         st.info(
-            f"💪 **Suggested approach:** Complete {catch_up_workouts[0]} first, "
-            f"then immediately log {remaining_workouts} to finish your week strong!"
+            f"💪 **Complete {today_types[0]} first**, then immediately log "
+            f"{today_types[1]} to finish strong today!"
         )

@@ -105,12 +105,116 @@ def get_weekly_split_status() -> dict:
     }
 
 
+def _group_workouts_into_combos(needed_types: list[str], days_left: int) -> list[dict]:
+    """
+    Group workouts into realistic daily combos for catch-up mode.
+
+    Pairing Strategy:
+    - Legs + Upper (non-overlapping muscle groups)
+    - Push + Lower (chest/shoulders + legs)
+    - Pull + Legs (back/biceps + legs)
+    - Standalone if only 1 workout remaining
+
+    Args:
+        needed_types: List of workout types to complete (e.g., ["Legs", "Push", "Upper"])
+        days_left: Days remaining in week
+
+    Returns:
+        List of combo dicts:
+        [
+            {
+                "day": "Today",
+                "types": ["Legs", "Upper"],
+                "duration_min": 70,
+                "rest_between_min": 5
+            },
+            {
+                "day": "Tomorrow",
+                "types": ["Push"],
+                "duration_min": 35
+            }
+        ]
+    """
+    # Pairing preferences (complementary muscle groups)
+    pairings = {
+        "Legs": ["Upper"],  # Legs + Upper body
+        "Upper": ["Legs"],
+        "Push": ["Lower", "Legs"],  # Push + Legs variations
+        "Pull": ["Lower", "Legs"],  # Pull + Legs variations
+        "Lower": ["Push", "Pull"]
+    }
+
+    combos = []
+    remaining = needed_types.copy()
+    day_labels = ["Today", "Tomorrow"] + [f"Day {i}" for i in range(3, 8)]
+
+    day_idx = 0
+
+    while remaining and day_idx < days_left:
+        if len(remaining) == 1:
+            # Single workout remaining
+            combos.append({
+                "day": day_labels[day_idx],
+                "types": [remaining[0]],
+                "duration_min": 35,  # Express mode default
+                "rest_between_min": 0
+            })
+            remaining = []
+        else:
+            # Try to pair first workout with complementary type
+            first = remaining[0]
+            paired = False
+
+            for preferred_pair in pairings.get(first, []):
+                if preferred_pair in remaining:
+                    # Found a pair!
+                    combos.append({
+                        "day": day_labels[day_idx],
+                        "types": [first, preferred_pair],
+                        "duration_min": 70,  # 2 x 35 min express
+                        "rest_between_min": 5
+                    })
+                    remaining.remove(first)
+                    remaining.remove(preferred_pair)
+                    paired = True
+                    break
+
+            if not paired:
+                # No good pair found - do first workout solo
+                combos.append({
+                    "day": day_labels[day_idx],
+                    "types": [first],
+                    "duration_min": 35,
+                    "rest_between_min": 0
+                })
+                remaining.remove(first)
+
+        day_idx += 1
+
+    # If more workouts than days, add overflow to last day
+    if remaining:
+        if combos:
+            combos[-1]["types"].extend(remaining)
+            combos[-1]["duration_min"] += len(remaining) * 35
+        else:
+            # Edge case: no combos created yet
+            combos.append({
+                "day": "Today",
+                "types": remaining,
+                "duration_min": len(remaining) * 35,
+                "rest_between_min": 5 if len(remaining) > 1 else 0
+            })
+
+    return combos
+
+
 @tool
 def suggest_next_workout() -> dict:
     """
     Suggest the next workout based on rotation and weekly progress.
 
     NEW: Includes catch-up mode detection when multiple workouts needed with limited time.
+    Returns smart workout combos for catch-up mode.
 
     Returns:
         Suggested workout type with reasoning, plus catch-up mode info if applicable
@@ -136,19 +240,27 @@ def suggest_next_workout() -> dict:
             needed_types.remove(suggested)
             needed_types.insert(0, suggested)
 
-        # Get template if available
-        template = get_template(suggested.lower())
+        # NEW: Group into smart combos
+        combos = _group_workouts_into_combos(needed_types, days_left)
+
+        # First combo for today
+        today_combo = combos[0]
+        first_type_today = today_combo["types"][0]
+
+        # Get template if available (for backward compatibility)
+        template = get_template(first_type_today.lower())
         template_id = template.get("id") if template else None
         template_name = template.get("name") if template else None
 
         return {
-            "suggested_type": suggested,
+            "suggested_type": first_type_today,  # First type in today's combo
             "reason": f"Catch-up mode: {total_remaining} workouts needed in {days_left} day(s)",
             "template_id": template_id,
             "template_name": template_name,
             "weekly_status": status,
             "catch_up_mode": True,
-            "catch_up_workouts": needed_types,
+            "catch_up_combos": combos,  # NEW: Structured combos instead of flat list
+            "catch_up_workouts": needed_types,  # Keep for backward compatibility
             "catch_up_count": total_remaining,
             "express_recommended": True,
             "days_left_in_week": days_left

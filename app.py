@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from src.ui.session import init_session_state
 from src.ui.navigation import render_bottom_nav
 from src.ui.confirmation_dialogs import show_delete_confirmation
+from src.ui.shared_components import render_sidebar
 from src.tools.recommend_tools import get_weekly_split_status
 from src.data import get_all_logs, get_logs_by_date_range
 from src.ui.styles import get_global_styles
@@ -88,15 +89,15 @@ st.markdown("""
 button[kind="secondary"]:has(p:contains("Delete")),
 button[kind="secondary"]:has(p:contains("🗑️")),
 button:has(p:contains("❌")) {
-    background-color: #d32f2f !important;
+    background-color: var(--color-destructive) !important;
     color: white !important;
-    border: 1px solid #b71c1c !important;
+    border: 1px solid var(--color-destructive-hover) !important;
 }
 
 button[kind="secondary"]:has(p:contains("Delete")):hover,
 button[kind="secondary"]:has(p:contains("🗑️")):hover,
 button:has(p:contains("❌")):hover {
-    background-color: #b71c1c !important;
+    background-color: var(--color-destructive-hover) !important;
 }
 
 /* X button styling for recent activity - match expander height */
@@ -126,61 +127,7 @@ button:has(p:contains("❌")) {
 # ============================================================================
 
 with st.sidebar:
-    st.title("🏋️ Gym Bro")
-    st.caption("AI Fitness Coach")
-
-    st.divider()
-
-    # Quick navigation
-    st.subheader("Quick Links")
-
-    if st.button("📅 View History", key="sidebar_history", use_container_width=True):
-        st.switch_page("pages/3_History.py")
-
-    if st.button("📊 View Progress", key="sidebar_progress", use_container_width=True):
-        st.switch_page("pages/4_Progress.py")
-
-    if st.button("🗑️ View Trash", key="sidebar_trash", use_container_width=True):
-        st.switch_page("pages/5_Trash.py")
-
-    st.divider()
-
-    # Quick stats
-    st.subheader("Stats")
-
-    try:
-        from src.data import get_workout_count
-        workouts_last_7 = get_workout_count(7)
-        workouts_last_30 = get_workout_count(30)
-
-        st.metric("Last 7 Days", workouts_last_7)
-        st.metric("Last 30 Days", workouts_last_30)
-
-        # Workout streak
-        from datetime import date, timedelta
-        logs = get_all_logs()
-        if logs:
-            # Calculate streak (consecutive days with workouts)
-            logs_by_date = {}
-            for log in logs:
-                log_date = log.get('date')
-                if log_date:
-                    logs_by_date[log_date] = True
-
-            streak = 0
-            current_date = date.today()
-            while current_date.isoformat() in logs_by_date:
-                streak += 1
-                current_date -= timedelta(days=1)
-
-            if streak > 0:
-                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
-
-    except Exception as e:
-        st.caption("Stats unavailable")
-
-    st.divider()
-    st.caption("Version 1.0.0")
+    render_sidebar(current_page="Home", show_version=True)
 
 # ============================================================================
 # Header
@@ -309,6 +256,7 @@ try:
 
         for log in recent_logs:
             # Create columns: expander on left, delete button on right
+            st.markdown('<div class="expandable-row-with-action">', unsafe_allow_html=True)
             col_expand, col_delete = st.columns([6, 1])
 
             with col_expand:
@@ -371,6 +319,8 @@ try:
                 # Delete button aligned with expander header - no margin needed with CSS fix
                 if st.button("❌", key=f"x_{log.get('id')}", help="Delete workout"):
                     show_delete_confirmation(log)
+
+            st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
     st.error(f"Could not load recent activity: {str(e)}")

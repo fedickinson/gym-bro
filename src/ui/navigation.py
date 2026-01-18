@@ -48,6 +48,28 @@ def render_bottom_nav(current_page: str):
         color: var(--color-text-primary) !important;
     }
 
+    /* PRIMARY action button (Log) - larger and emphasized */
+    div[data-testid="column"]:nth-child(2) > div > div > div > button[kind="secondary"] {
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+        color: var(--color-primary-500) !important;
+    }
+
+    div[data-testid="column"]:nth-child(2) > div > div > div > button[kind="secondary"]:hover {
+        background: rgba(76, 175, 80, 0.1) !important;
+        color: var(--color-primary-500) !important;
+    }
+
+    /* SECONDARY primary action button (Chat) - slightly emphasized */
+    div[data-testid="column"]:nth-child(3) > div > div > div > button[kind="secondary"] {
+        font-size: 0.8125rem !important;
+        font-weight: 500 !important;
+    }
+
+    div[data-testid="column"]:nth-child(3) > div > div > div > button[kind="secondary"]:hover {
+        background: rgba(76, 175, 80, 0.05) !important;
+    }
+
     /* Container for bottom nav */
     .nav-container {
         position: fixed;
@@ -78,11 +100,26 @@ def render_bottom_nav(current_page: str):
         with cols[idx]:
             # Check if this is the active page
             if item["label"] == current_page:
-                # Active page - show without button
+                # Determine if this is a primary action item for enhanced styling
+                is_primary = item["label"] == "Log"
+                is_secondary_primary = item["label"] == "Chat"
+
+                # Active page - show without button with enhanced visual state
+                font_size = "0.875rem" if is_primary else "0.8125rem" if is_secondary_primary else "0.75rem"
+                font_weight = "600" if is_primary else "500" if is_secondary_primary else "normal"
+                bg_color = "rgba(76, 175, 80, 0.15)" if (is_primary or is_secondary_primary) else "transparent"
+
                 st.markdown(f"""
-                <div style="text-align: center; padding: 8px 4px; color: var(--color-primary-500); border-top: 2px solid var(--color-primary-500);">
+                <div style="
+                    text-align: center;
+                    padding: 8px 4px;
+                    color: var(--color-primary-500);
+                    border-top: 3px solid var(--color-primary-500);
+                    background: {bg_color};
+                    font-weight: {font_weight};
+                ">
                     <div style="font-size: 24px; margin-bottom: 2px;">{item["icon"]}</div>
-                    <div style="font-size: 0.75rem;">{item["label"]}</div>
+                    <div style="font-size: {font_size};">{item["label"]}</div>
                 </div>
                 """, unsafe_allow_html=True)
             else:

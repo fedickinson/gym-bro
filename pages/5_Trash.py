@@ -8,6 +8,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 from src.ui.session import init_session_state
 from src.ui.navigation import render_bottom_nav
+from src.ui.shared_components import render_sidebar
 from src.ui.confirmation_dialogs import (
     show_permanent_delete_warning,
     show_bulk_permanent_delete_warning
@@ -62,28 +63,28 @@ button:has(p:contains("♻️")) {
     align-items: center !important;
     justify-content: center !important;
     margin: 0 !important;
-    background-color: #2e7d32 !important;
+    background-color: var(--color-restore) !important;
     color: white !important;
-    border: 1px solid #1b5e20 !important;
+    border: 1px solid var(--color-restore-hover) !important;
 }
 
 button:has(p:contains("♻️")):hover {
-    background-color: #1b5e20 !important;
+    background-color: var(--color-restore-hover) !important;
 }
 
 /* Red delete buttons in trash page */
 button[kind="secondary"]:has(p:contains("Delete")),
 button[kind="secondary"]:has(p:contains("🗑️")),
 button:has(p:contains("🔥")) {
-    background-color: #d32f2f !important;
+    background-color: var(--color-destructive) !important;
     color: white !important;
-    border: 1px solid #b71c1c !important;
+    border: 1px solid var(--color-destructive-hover) !important;
 }
 
 button[kind="secondary"]:has(p:contains("Delete")):hover,
 button[kind="secondary"]:has(p:contains("🗑️")):hover,
 button:has(p:contains("🔥")):hover {
-    background-color: #b71c1c !important;
+    background-color: var(--color-destructive-hover) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -93,64 +94,16 @@ button:has(p:contains("🔥")):hover {
 # ============================================================================
 
 with st.sidebar:
-    st.title("🏋️ Gym Bro")
-    st.caption("AI Fitness Coach")
+    render_sidebar(current_page="Trash")
 
-    st.divider()
-
-    # Quick navigation
-    st.subheader("Quick Links")
-
-    if st.button("🏠 Home", key="sidebar_home", use_container_width=True):
-        st.switch_page("app.py")
-
-    if st.button("📅 View History", key="sidebar_history", use_container_width=True):
-        st.switch_page("pages/3_History.py")
-
-    if st.button("📊 View Progress", key="sidebar_progress", use_container_width=True):
-        st.switch_page("pages/4_Progress.py")
-
-    st.divider()
-
-    # Quick stats
-    st.subheader("Stats")
-
+    # Trash-specific stat
     try:
-        from src.data import get_workout_count, get_all_logs, get_deleted_logs
-        from datetime import date, timedelta
-
-        workouts_last_7 = get_workout_count(7)
-        workouts_last_30 = get_workout_count(30)
-
-        st.metric("Last 7 Days", workouts_last_7)
-        st.metric("Last 30 Days", workouts_last_30)
-
-        # Workout streak
-        logs = get_all_logs()
-        if logs:
-            # Calculate streak (consecutive days with workouts)
-            logs_by_date = {}
-            for log in logs:
-                log_date = log.get('date')
-                if log_date:
-                    logs_by_date[log_date] = True
-
-            streak = 0
-            current_date = date.today()
-            while current_date.isoformat() in logs_by_date:
-                streak += 1
-                current_date -= timedelta(days=1)
-
-            if streak > 0:
-                st.metric("Current Streak", f"{streak} day{'s' if streak != 1 else ''}")
-
-        # Trash stats
         deleted = get_deleted_logs()
         if deleted:
+            st.divider()
             st.metric("In Trash", len(deleted))
-
-    except Exception as e:
-        st.caption("Stats unavailable")
+    except:
+        pass
 
     st.divider()
     st.caption("Version 1.0.0")
@@ -221,6 +174,7 @@ try:
                 warning_icon = "🔔 "
 
             # Create columns: expander on left, restore button on right
+            st.markdown('<div class="expandable-row-with-action">', unsafe_allow_html=True)
             col_expand, col_restore = st.columns([6, 1])
 
             with col_expand:
@@ -291,6 +245,8 @@ try:
                         st.rerun()
                     else:
                         st.error("❌ Failed to restore workout")
+
+            st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
     st.error(f"Error loading deleted workouts: {str(e)}")
