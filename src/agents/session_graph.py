@@ -9,9 +9,14 @@ from typing import TypedDict, Literal
 from langgraph.graph import StateGraph, END
 from datetime import datetime, date
 import uuid
+import re
+import logging
 
 from src.data import add_log
 from src.tools.recommend_tools import suggest_next_workout, get_workout_template
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -578,6 +583,42 @@ def initialize_planning(state: SessionWithPlanState) -> SessionWithPlanState:
         }
 
 
+def _extract_explicit_workout_type(user_message: str) -> str | None:
+    """
+    Extract explicit workout type from user messages like 'I want Pull'.
+
+    Args:
+        user_message: The user's chat message
+
+    Returns:
+        Workout type ("Push", "Pull", "Legs", "Upper", "Lower") or None
+    """
+    message_lower = user_message.lower()
+    valid_types = ["push", "pull", "legs", "upper", "lower"]
+
+    # Build patterns that explicitly match valid workout types
+    type_pattern = "|".join(valid_types)
+
+    # Patterns to detect explicit workout type requests (ordered by specificity)
+    patterns = [
+        # Most specific first: "instead of X, do Y"
+        rf"\binstead of \w+.*?\b({type_pattern})\b",
+        # "I want Pull" / "Let's do Legs" / "I want to do Upper"
+        rf"\b(?:i want to do|i want|let'?s do)\s+(?:a\s+)?({type_pattern})\b",
+        # "Pull workout" / "Legs day" / "Push instead"
+        rf"\b({type_pattern})\s+(?:workout|day|instead)\b",
+        # "change to Pull" / "switch to Legs"
+        rf"\b(?:change|switch)(?:\s+it)?\s+to\s+(?:a\s+)?({type_pattern})\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            return match.group(1).title()
+
+    return None
+
+
 def process_planning_chat(state: SessionWithPlanState, user_message: str) -> SessionWithPlanState:
     """
     Process user's planning chat message and modify template.
@@ -606,7 +647,37 @@ def process_planning_chat(state: SessionWithPlanState, user_message: str) -> Ses
             equipment_unavailable=equipment_unavailable
         )
 
-        # Create adjustment record
+        # Extract modified template
+        modified_template = result.get('modified_template', current_template)
+
+        # Detect workout type change (priority: explicit > template > inferred)
+        new_workout_type = None
+        current_type = state.get('actual_workout_type') or state.get('suggested_type')
+
+        # 1. Check explicit user request
+        explicit_type = _extract_explicit_workout_type(user_message)
+        if explicit_type:
+            logger.debug(f"Type change via explicit request: '{user_message}' -> {explicit_type}")
+            new_workout_type = explicit_type
+
+        # 2. Check if template type changed
+        if not new_workout_type:
+            template_type = modified_template.get('type')
+            if template_type and template_type != current_type:
+                logger.debug(f"Type change via template field: {current_type} -> {template_type}")
+                new_workout_type = template_type
+
+        # 3. Infer from exercises as fallback
+        if not new_workout_type:
+            exercises = modified_template.get('exercises', [])
+            inferred_type = _infer_workout_type_from_exercises(exercises)
+            if inferred_type and inferred_type != current_type:
+                logger.debug(f"Type change via exercise inference: {current_type} -> {inferred_type}")
+                new_workout_type = inferred_type
+            else:
+                logger.debug(f"No workout type change detected, keeping: {current_type}")
+
+        # Create adjustment record (build completely before appending)
         adjustment = {
             "timestamp": datetime.now().isoformat(),
             "user_message": user_message,
@@ -614,20 +685,43 @@ def process_planning_chat(state: SessionWithPlanState, user_message: str) -> Ses
             "template_change": True
         }
 
+        # Add type change info if detected (BEFORE appending to list)
+        if new_workout_type:
+            adjustment["workout_type_changed"] = True
+            adjustment["new_type"] = new_workout_type
+            adjustment["old_type"] = current_type
+
         # Update plan adjustments history
         adjustments = state.get('plan_adjustments', []).copy()
         adjustments.append(adjustment)
 
-        # Update state with modified template
-        return {
+        # Build updated state
+        updated_state = {
             **state,
-            "planned_template": result.get('modified_template', current_template),
+            "planned_template": modified_template,
             "plan_adjustments": adjustments,
             "equipment_unavailable": result.get('equipment_unavailable', equipment_unavailable),
             "equipment_available": result.get('equipment_required', equipment_available),
             "last_activity_at": datetime.now().isoformat(),
             "response": result.get('explanation', 'Template updated')
         }
+
+        # Apply type change if detected
+        if new_workout_type:
+            updated_state["actual_workout_type"] = new_workout_type
+
+        # Handle combo mode (update specific template in list)
+        if state.get('combo_mode') and state.get('planned_templates') and new_workout_type:
+            templates = state['planned_templates'].copy()
+            current_idx = state.get('current_template_index', 0)
+
+            # Bounds check to prevent IndexError
+            if 0 <= current_idx < len(templates):
+                templates[current_idx]['template'] = modified_template
+                templates[current_idx]['type'] = new_workout_type
+                updated_state['planned_templates'] = templates
+
+        return updated_state
 
     except Exception as e:
         # On error, return state unchanged with error message
