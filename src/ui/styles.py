@@ -649,6 +649,22 @@ def get_global_styles():
         }
     }
 
+    /* Large touch-friendly stepper buttons */
+    button:has(p:contains("➖")),
+    button:has(p:contains("➕")) {
+        min-height: 64px !important;
+        font-size: 2rem !important;
+        font-weight: 700;
+        background: var(--color-primary) !important;
+        color: white !important;
+    }
+
+    button:has(p:contains("➖")):active,
+    button:has(p:contains("➕")):active {
+        transform: scale(0.95);
+        background: var(--color-primary-hover) !important;
+    }
+
     /* Enhanced focus for accessibility */
     button:focus-visible,
     input:focus-visible,

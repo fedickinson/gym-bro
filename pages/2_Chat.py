@@ -10,7 +10,7 @@ load_dotenv()
 
 import streamlit as st
 from src.ui.session import init_session_state, add_chat_message, clear_chat_history, get_orchestrator
-from src.ui.navigation import render_bottom_nav
+from src.ui.navigation import render_bottom_nav, scroll_to_top
 from src.ui.shared_components import render_sidebar
 from src.ui.styles import get_global_styles
 
@@ -26,6 +26,9 @@ st.set_page_config(
 
 # Initialize session state
 init_session_state()
+
+# Scroll to top on page load
+scroll_to_top()
 
 # Render bottom navigation
 st.session_state.current_page = 'Chat'

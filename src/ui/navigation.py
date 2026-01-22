@@ -145,3 +145,15 @@ def get_current_page_name() -> str:
     # Try to determine from query params or session state
     # For now, we'll rely on pages setting this manually
     return st.session_state.get('current_page', 'Home')
+
+
+def scroll_to_top():
+    """Force scroll to top of page using JavaScript."""
+    st.markdown("""
+    <script>
+        window.scrollTo({top: 0, behavior: 'instant'});
+        document.addEventListener('DOMContentLoaded', function() {
+            window.scrollTo({top: 0, behavior: 'instant'});
+        });
+    </script>
+    """, unsafe_allow_html=True)

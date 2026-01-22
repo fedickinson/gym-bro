@@ -11,7 +11,7 @@ load_dotenv()
 import streamlit as st
 from datetime import date, timedelta
 from src.ui.session import init_session_state
-from src.ui.navigation import render_bottom_nav
+from src.ui.navigation import render_bottom_nav, scroll_to_top
 from src.ui.confirmation_dialogs import show_delete_confirmation
 from src.ui.shared_components import render_sidebar
 from src.tools.recommend_tools import get_weekly_split_status
@@ -37,6 +37,9 @@ st.set_page_config(
 
 # Initialize session state
 init_session_state()
+
+# Scroll to top on page load
+scroll_to_top()
 
 # Validate templates exist for all workout types
 def validate_templates():

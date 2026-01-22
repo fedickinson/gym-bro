@@ -45,7 +45,13 @@ INSTRUCTIONS:
 1. Analyze the user's request
 2. Modify the template accordingly
 3. If equipment is mentioned as unavailable, find suitable alternatives that work the same muscle groups
-4. Maintain the workout type (Push/Pull/Legs) unless user explicitly asks to change it
+4. **Workout Type Handling:**
+   - MAINTAIN the current workout type UNLESS user explicitly requests a change
+   - If user says "I want Pull" or "Let's do Legs instead":
+     * UPDATE the template's "type" field to match their request
+     * REPLACE exercises to match the new workout type
+     * Mention the type change clearly in the explanation
+   - ENSURE the "type" field in modified_template matches the exercise selection
 5. Keep target sets/reps similar unless user asks to change volume
 6. **IMPORTANT: For suggested_weight_lbs:**
    - ALWAYS include this field for weighted exercises

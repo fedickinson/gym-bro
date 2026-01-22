@@ -65,11 +65,14 @@ See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 - **LangGraph** - Stateful workflow for logging
 - **Claude API** - LLM (Anthropic)
 - **Streamlit** - Web UI
+- **Supabase** - Postgres database (persistent cloud storage)
 - **Pydantic** - Data validation
 
 ---
 
 ## Quick Start
+
+### Local Development
 
 ```bash
 # Clone
@@ -81,16 +84,37 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Configure
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-echo "OPENAI_API_KEY=sk-proj-..." >> .env  # For audio transcription
-echo "DEV_MODE=true" >> .env  # Optional: Enable dev tools
+# Configure Supabase (Required for persistent storage)
+# See SUPABASE_SETUP.md for detailed instructions
+cp .env.example .env
+# Edit .env and add:
+#   SUPABASE_URL=https://your-project.supabase.co
+#   SUPABASE_KEY=your-anon-key
+#   ANTHROPIC_API_KEY=sk-ant-...
+#   OPENAI_API_KEY=sk-proj-...  # For audio transcription
+
+# Test connection
+python scripts/test_supabase_connection.py
 
 # Run
 streamlit run app.py
 ```
 
 **Live Demo**: [https://gym-bro-o.streamlit.app/](https://gym-bro-o.streamlit.app/)
+
+### Database Setup
+
+This app uses **Supabase (Postgres)** for persistent cloud storage:
+
+1. **Quick Setup** (15-30 min): See [SUPABASE_SETUP.md](SUPABASE_SETUP.md)
+2. **Full Guide**: See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive instructions
+3. **Migration**: Run `python scripts/migrate_json_to_supabase.py --execute`
+
+**Why Supabase?**
+- ✅ Free tier (500MB, unlimited requests)
+- ✅ Persistent storage (survives Streamlit redeployments)
+- ✅ Automatic backups (7 days)
+- ✅ Works seamlessly on mobile
 
 ---
 
@@ -103,9 +127,14 @@ fitness-coach/
 │   ├── agents/            # Router, ReAct agents, LangGraph
 │   ├── chains/            # Simple LLM chains
 │   ├── tools/             # Agent tools (search, recommend, etc.)
-│   ├── data.py            # JSON data layer
+│   ├── database.py        # Supabase connection manager
+│   ├── data.py            # Data layer (Supabase queries)
 │   └── models.py          # Pydantic models
-├── data/                  # JSON storage
+├── scripts/
+│   ├── schema.sql         # Database schema
+│   ├── migrate_json_to_supabase.py  # One-time migration
+│   └── test_supabase_connection.py  # Connection test
+├── data/                  # Local backups (legacy)
 └── pages/                 # Streamlit pages
 ```
 
@@ -143,7 +172,10 @@ See [ROADMAP.md](ROADMAP.md) for detailed progress.
 ## Documentation
 
 - [CLAUDE.md](CLAUDE.md) - Technical architecture and design decisions
+- [SUPABASE_SETUP.md](SUPABASE_SETUP.md) - Quick start guide for database setup (15-30 min)
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Comprehensive deployment guide with troubleshooting
 - [ROADMAP.md](ROADMAP.md) - Development plan and status
+- [DEV_MODE.md](DEV_MODE.md) - Developer tools and debugging features
 - [docs/](docs/) - Learning journal and blog drafts
 
 ---
