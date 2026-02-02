@@ -11,6 +11,7 @@ import tempfile
 import openai
 from pathlib import Path
 import os
+import httpx
 
 
 def record_and_transcribe() -> str | None:
@@ -55,6 +56,13 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
     Returns:
         Transcribed text, or None if transcription failed
     """
+    # Check for OpenAI API key
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("❌ OpenAI API key not configured")
+        st.warning("💡 Audio transcription requires OPENAI_API_KEY in app settings")
+        st.info("For now, use the text input below to log your workout")
+        return None
+
     # Check if audio is too short
     if len(audio_bytes) < 1000:  # Less than 1KB
         st.error("❌ Audio too short - please try again")
@@ -89,6 +97,17 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
         st.info(f"**You said:** {transcribed_text}")
 
         return transcribed_text
+
+    except httpx.ConnectError:
+        st.error("❌ Cannot connect to OpenAI API")
+        st.warning("💡 Check your OPENAI_API_KEY in app settings or network connection")
+        st.info("For now, use the text input below to log your workout")
+        return None
+
+    except (httpx.TimeoutException, httpx.ReadTimeout, httpx.ConnectTimeout):
+        st.error("❌ OpenAI API request timed out")
+        st.warning("💡 Network connection issue - try again or use text input")
+        return None
 
     except openai.APIError as e:
         st.error(f"❌ OpenAI API error: {str(e)}")
