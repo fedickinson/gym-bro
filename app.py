@@ -44,18 +44,43 @@ scroll_to_top()
 # Validate templates exist for all workout types
 def validate_templates():
     """Validate that all workout types have corresponding templates."""
+    import httpx
     from src.data import get_template
-    required_types = ["Push", "Pull", "Legs", "Upper", "Lower"]
-    missing = []
 
-    for workout_type in required_types:
-        template = get_template(workout_type.lower())
-        if not template:
-            missing.append(workout_type)
+    try:
+        required_types = ["Push", "Pull", "Legs", "Upper", "Lower"]
+        missing = []
 
-    if missing:
-        st.warning(f"⚠️ Missing templates for: {', '.join(missing)}")
-        st.caption("Some workout types may not load properly. Check data/templates.json")
+        for workout_type in required_types:
+            template = get_template(workout_type.lower())
+            if not template:
+                missing.append(workout_type)
+
+        if missing:
+            st.warning(f"⚠️ Missing templates for: {', '.join(missing)}")
+            st.caption("Some workout types may not load properly. Check data/templates.json")
+
+    except httpx.ConnectError:
+        st.error("❌ Cannot connect to Supabase database")
+        st.warning("**Possible causes:**")
+        st.markdown("""
+        1. **Missing credentials** - Check your Streamlit Cloud app settings:
+           - Go to app menu (⋮) → Settings → Secrets
+           - Ensure `SUPABASE_URL` and `SUPABASE_KEY` are set
+
+        2. **Supabase project paused** - Free tier auto-pauses after 7 days:
+           - Go to https://supabase.com/dashboard
+           - Click on your project to wake it up
+           - Wait 30 seconds and refresh this app
+
+        3. **Network issue** - Temporary connectivity problem, try refreshing
+        """)
+        st.stop()  # Stop app execution to prevent cascade errors
+
+    except Exception as e:
+        st.error(f"❌ Database error: {str(e)}")
+        st.warning("💡 Check Streamlit Cloud logs for details (Manage app → Logs)")
+        st.stop()
 
 # Call validation on app startup
 validate_templates()
