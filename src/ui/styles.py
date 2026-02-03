@@ -907,5 +907,15 @@ def get_global_styles():
         }
     }
 
+    /* ========================================
+       HIDE STREAMLIT DEFAULT NAVIGATION
+       ======================================== */
+
+    /* Hide Streamlit's automatic page navigation in sidebar */
+    /* User navigates from Home page instead */
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+
     </style>
     """
