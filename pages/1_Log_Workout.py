@@ -526,8 +526,6 @@ def render_session_exercise_intro():
 
     # Exercise information (muscle groups, equipment, category) - Ultra-compact grid
     if exercise_info.get('found_in_catalog'):
-        st.markdown("### 🎯 Exercise Details")
-
         # Get data
         muscle_groups = exercise_info.get('muscle_groups', [])
         equipment = exercise_info.get('equipment', [])
@@ -537,20 +535,20 @@ def render_session_exercise_intro():
         equipment_text = ", ".join(equipment) if equipment else "N/A"
         type_text = category if category else "N/A"
 
-        # Ultra-compact grid matching Workout Plan style
+        # Ultra-compact grid matching Workout Plan style (removed header, reduced spacing)
         st.markdown(f"""
-        <div class="workout-plan-grid" style="grid-template-columns: 1fr;">
-            <div class="plan-item">
+        <div class="workout-plan-grid" style="grid-template-columns: 1fr; gap: var(--space-2); margin-bottom: var(--space-2);">
+            <div class="plan-item" style="padding: var(--space-2);">
                 <div class="plan-label">Targets</div>
-                <div class="plan-value" style="font-size: 1rem; font-weight: 600;">{targets_text}</div>
+                <div class="plan-value" style="font-size: 0.9rem; font-weight: 600;">{targets_text}</div>
             </div>
-            <div class="plan-item">
+            <div class="plan-item" style="padding: var(--space-2);">
                 <div class="plan-label">Equipment</div>
-                <div class="plan-value" style="font-size: 1rem; font-weight: 600;">{equipment_text}</div>
+                <div class="plan-value" style="font-size: 0.9rem; font-weight: 600;">{equipment_text}</div>
             </div>
-            <div class="plan-item">
+            <div class="plan-item" style="padding: var(--space-2);">
                 <div class="plan-label">Type</div>
-                <div class="plan-value" style="font-size: 1rem; font-weight: 600;">{type_text}</div>
+                <div class="plan-value" style="font-size: 0.9rem; font-weight: 600;">{type_text}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -559,35 +557,32 @@ def render_session_exercise_intro():
         if exercise_info.get('is_first_time'):
             weight_reasoning = exercise_info.get('weight_reasoning', '')
             if weight_reasoning:
-                st.info(f"💡 **First time?** {weight_reasoning}")
+                st.info(f"💡 {weight_reasoning}")
 
-        st.divider()
+    # Plan summary - Compact 2x2 grid for mobile (no header, tighter spacing)
 
-    # Plan summary - Compact 2x2 grid for mobile
-    st.subheader("📋 Workout Plan")
-
-    # Use custom compact layout instead of st.metric for less vertical space
+    # Use custom compact layout with reduced spacing
     st.markdown("""
     <style>
     .workout-plan-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: var(--space-3);
-        margin-bottom: var(--space-4);
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
     }
     .plan-item {
         background: var(--color-bg-secondary);
-        padding: var(--space-3);
+        padding: var(--space-2);
         border-radius: 8px;
         border: 1px solid var(--color-border);
     }
     .plan-label {
-        font-size: 0.875rem;
+        font-size: 0.75rem;
         color: var(--color-text-secondary);
         margin-bottom: var(--space-1);
     }
     .plan-value {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         font-weight: 700;
         color: var(--color-primary-500);
     }
@@ -595,7 +590,7 @@ def render_session_exercise_intro():
     """, unsafe_allow_html=True)
 
     # 2x2 compact grid
-    weight_display = f"{suggested_weight:.0f} lbs" if suggested_weight else "Choose your weight"
+    weight_display = f"{suggested_weight:.0f} lbs" if suggested_weight else "Choose"
 
     st.markdown(f"""
     <div class="workout-plan-grid">
@@ -604,21 +599,19 @@ def render_session_exercise_intro():
             <div class="plan-value">{target_sets}</div>
         </div>
         <div class="plan-item">
-            <div class="plan-label">Reps per Set</div>
+            <div class="plan-label">Reps</div>
             <div class="plan-value">{target_reps}</div>
         </div>
         <div class="plan-item">
-            <div class="plan-label">Suggested Weight</div>
+            <div class="plan-label">Weight</div>
             <div class="plan-value">{weight_display}</div>
         </div>
         <div class="plan-item">
-            <div class="plan-label">Rest Between Sets</div>
+            <div class="plan-label">Rest</div>
             <div class="plan-value">{rest_seconds}s</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-    st.divider()
 
     # Primary action: Start Exercise
     if st.button(
