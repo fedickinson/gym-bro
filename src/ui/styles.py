@@ -914,7 +914,28 @@ def get_global_styles():
     /* Hide Streamlit's automatic page navigation in sidebar */
     /* User navigates from Home page instead */
     [data-testid="stSidebarNav"] {
-        display: none;
+        display: none !important;
+    }
+
+    /* Additional selectors to ensure it's hidden */
+    section[data-testid="stSidebar"] nav {
+        display: none !important;
+    }
+
+    section[data-testid="stSidebar"] ul[role="listbox"] {
+        display: none !important;
+    }
+
+    /* Mobile: Hide sidebar by default, show with collapse button */
+    @media (max-width: 768px) {
+        /* Sidebar starts collapsed on mobile */
+        section[data-testid="stSidebar"] {
+            transform: translateX(-100%);
+        }
+
+        section[data-testid="stSidebar"][data-collapsed="false"] {
+            transform: translateX(0);
+        }
     }
 
     </style>
