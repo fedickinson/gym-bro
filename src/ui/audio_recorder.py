@@ -136,15 +136,31 @@ def text_input_fallback(placeholder: str = "Example: bench 135x8x3, overhead 95x
         placeholder: Placeholder text for the input
 
     Returns:
-        User's typed input
+        User's typed input when submit button is clicked
     """
     st.subheader("⌨️ Or Type Your Workout")
-    return st.text_area(
+
+    # Text area for input
+    manual_text = st.text_area(
         "Workout notes",
         placeholder=placeholder,
         height=150,
-        help="Enter your exercises with sets, reps, and weights. Natural language works!"
+        help="Enter your exercises with sets, reps, and weights. Natural language works!",
+        key="manual_workout_input"
     )
+
+    # Submit button for mobile (large touch target)
+    if st.button("✅ Submit Workout", key="submit_manual_workout", use_container_width=True, type="primary"):
+        if manual_text and manual_text.strip():
+            # Store in session state to persist the submission
+            st.session_state.submitted_manual_workout = manual_text
+            return manual_text
+
+    # Return submitted text from session state if it exists
+    if 'submitted_manual_workout' in st.session_state:
+        return st.session_state.submitted_manual_workout
+
+    return ""
 
 
 def combined_input() -> str | None:
@@ -173,10 +189,14 @@ def combined_input() -> str | None:
         manual_input = text_input_fallback()
 
     # IMPORTANT: We're now outside the column context here
-    # Return cached transcription if available and no new input
+    # Priority: transcription > manual input > cached transcription
     if transcription:
+        # Clear any submitted manual workout when new audio is recorded
+        if 'submitted_manual_workout' in st.session_state:
+            del st.session_state.submitted_manual_workout
         return transcription
     elif manual_input and manual_input.strip():
+        # User submitted manual text via button
         # Clear cached transcription if user types instead
         if 'cached_transcription' in st.session_state:
             del st.session_state.cached_transcription
