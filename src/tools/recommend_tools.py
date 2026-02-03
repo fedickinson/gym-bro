@@ -47,7 +47,9 @@ def get_weekly_split_status() -> dict:
                 "completed": {},
                 "next_in_rotation": config.get("rotation", ["Push"])[0]
             }
-            update_weekly_split({"config": config, "current_week": current})
+            # Update storage and reassign split to use fresh data
+            split = {"config": config, "current_week": current}
+            update_weekly_split(split)
     
     # Get workouts from this week
     logs = get_logs_by_date_range(week_start, today)
@@ -84,6 +86,22 @@ def get_weekly_split_status() -> dict:
     
     days_left = (week_end - today).days + 1
 
+    # Calculate rotation-based status for each type
+    completed_set = set(completed.keys())
+    next_in_rotation = current.get("next_in_rotation", "Push")
+    rotation = config.get("rotation", [])
+
+    rotation_status = {}
+    for workout_type in config.get("types", []):
+        status = _calculate_rotation_status(
+            workout_type,
+            completed_set,
+            next_in_rotation,
+            rotation
+        )
+        if status:
+            rotation_status[workout_type] = status
+
     # Add supplementary work status
     abs_status = get_supplementary_status("abs")
 
@@ -95,6 +113,7 @@ def get_weekly_split_status() -> dict:
         "next_suggested": next_suggested,
         "days_left_in_week": days_left,
         "summary": _generate_split_summary(completed, targets, remaining),
+        "rotation_status": rotation_status,
         "supplementary": {
             "abs": {
                 "count": abs_status["count"],
@@ -103,6 +122,44 @@ def get_weekly_split_status() -> dict:
             }
         }
     }
+
+
+def _calculate_rotation_status(
+    workout_type: str,
+    completed_types: set,
+    next_in_rotation: str,
+    rotation: list
+):
+    """
+    Determine if a workout type is behind based on rotation.
+
+    Args:
+        workout_type: Type to check (e.g., "Push")
+        completed_types: Set of workout types completed this week
+        next_in_rotation: What's next in the rotation cycle
+        rotation: Full rotation list (e.g., ["Push", "Pull", "Legs", ...])
+
+    Returns:
+        "behind" | "pending" | None
+    """
+    # Find indices in rotation
+    try:
+        next_index = rotation.index(next_in_rotation)
+        type_index = rotation.index(workout_type)
+    except ValueError:
+        # Type not in rotation, can't determine status
+        return None
+
+    # If this type comes BEFORE the next_in_rotation in the cycle,
+    # and hasn't been completed, it's behind
+    if type_index < next_index and workout_type not in completed_types:
+        return "behind"
+
+    # If type hasn't been done yet but still time (after next_in_rotation)
+    if workout_type not in completed_types:
+        return "pending"
+
+    return None
 
 
 def _group_workouts_into_combos(needed_types: list[str], days_left: int) -> list[dict]:

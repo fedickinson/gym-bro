@@ -25,38 +25,34 @@ def render_template_preview(template: dict, compact: bool = False):
         st.warning("No template loaded")
         return
 
-    # Display workout type and count
-    st.subheader(f"💪 {template.get('type', 'Unknown')} Workout")
-
-    # Show estimated duration if available
+    # More compact header - single line with type and duration
     duration = template.get('estimated_duration_min')
     if duration:
-        st.caption(f"{len(template['exercises'])} exercises • ~{duration} min")
+        st.markdown(f"**💪 {template.get('type', 'Unknown')} Workout** • {len(template['exercises'])} exercises • ~{duration} min")
     else:
-        st.caption(f"{len(template['exercises'])} exercises")
+        st.markdown(f"**💪 {template.get('type', 'Unknown')} Workout** • {len(template['exercises'])} exercises")
 
     if compact:
-        # COMPACT MODE: Show exercise name, sets×reps @ weight on one line
-        # Hide AI rationale in collapsed expander
+        # COMPACT MODE: Exercise name is clickable to show details
         for i, ex in enumerate(template['exercises'], 1):
             sets = ex.get('target_sets', 3)
             reps = ex.get('target_reps', 10)
             weight = ex.get('suggested_weight_lbs')
 
             # Format: "1. Squat - 3×8 @ 185 lbs"
-            exercise_line = f"**{i}. {ex.get('name')}** - {sets}×{reps}"
+            exercise_line = f"{i}. {ex.get('name')} - {sets}×{reps}"
             if weight:
                 exercise_line += f" @ {weight:.0f} lbs"
 
-            st.markdown(exercise_line)
-
-            # NEW: Collapsible details for rationale
+            # Make exercise name itself clickable for details
             reasoning = ex.get('reasoning', '')
             if reasoning:
-                with st.expander("💡 View details", expanded=False):
+                # Exercise line IS the expander label - click to see details
+                with st.expander(exercise_line, expanded=False):
                     st.caption(reasoning)
-
-        st.caption("👆 You can modify these via chat below")
+            else:
+                # No reasoning, just show the exercise
+                st.markdown(f"**{exercise_line}**")
     else:
         # Full mode: Show coaching notes and expandable exercises
         # Show coaching notes if any (simplified)
@@ -117,7 +113,7 @@ def render_planning_chat_interface():
     Returns:
         User's input message (or None if no input)
     """
-    st.subheader("💬 Modify Your Plan")
+    st.markdown("**💬 Modify Your Plan**")
     st.caption("Ask to change exercises, equipment, or focus")
 
     # Use a form to prevent reprocessing on rerun
@@ -224,34 +220,59 @@ def _render_workout_type_card(
     completed: int,
     target: int,
     remaining: int,
-    days_left: int
+    days_left: int,
+    rotation_status: str = None
 ):
     """
     Render individual workout type progress card.
 
     Shows completion status, progress bar, and last workout date.
+
+    Args:
+        workout_type: Type of workout (Push, Pull, Legs, etc.)
+        completed: Number completed this week
+        target: Weekly target
+        remaining: Number remaining
+        days_left: Days left in week
+        rotation_status: "behind" | "pending" | None
     """
-    # Determine status
-    if completed >= target:
-        status_emoji = "✓"
-        progress_percent = 1.0
+    # Determine status emoji and color based on rotation status
+    if rotation_status == "behind":
+        # BEHIND: Should have done before current rotation position
+        status_emoji = "⚠️"
+        progress_color = "error"
+    elif completed >= target:
+        # COMPLETED: Hit the weekly target
+        status_emoji = "✅"
+        progress_color = "success"
     elif completed > 0:
+        # IN PROGRESS: Started but not at target
         status_emoji = "⏳"
-        progress_percent = min(completed / target, 1.0) if target > 0 else 0
+        progress_color = "warning"
     else:
+        # PENDING: Not started, still okay
         status_emoji = "○"
+        progress_color = "info"
+
+    # Calculate progress percentage
+    if target > 0:
+        progress_percent = min(completed / target, 1.0)
+    else:
         progress_percent = 0.0
 
-    # Check if urgent (need to do multiple in remaining days)
-    is_urgent = remaining > 0 and remaining >= days_left
-
     # Card header with status
-    if completed >= target:
+    if progress_color == "success":
         st.success(f"**{workout_type}** {status_emoji}")
-    elif is_urgent:
+    elif progress_color == "error":
         st.error(f"**{workout_type}** {status_emoji}")
+    elif progress_color == "warning":
+        st.warning(f"**{workout_type}** {status_emoji}")
     else:
         st.info(f"**{workout_type}** {status_emoji}")
+
+    # Show status message for behind
+    if rotation_status == "behind":
+        st.caption("⚠️ Should have done before current rotation position")
 
     # Progress count
     st.caption(f"{completed}/{target} complete")
@@ -270,8 +291,6 @@ def _render_workout_type_card(
         st.caption(f"🟡 {date_str}")
     else:
         st.caption(f"🟠 {date_str}")
-
-    st.markdown("")  # Spacing
 
 
 def render_weekly_progress_summary(compact: bool = False):
@@ -302,53 +321,57 @@ def render_weekly_progress_summary(compact: bool = False):
     total_target = sum(targets.values())
     overall_percent = (total_completed / total_target) if total_target > 0 else 0
 
-    # --- Overall Summary (ALWAYS SHOWN) ---
-    st.markdown("### 📅 This Week")
+    # --- Overall Summary (ULTRA-COMPACT for mobile) ---
+    total_remaining = sum(remaining.values())
+    if days_left == 1:
+        days_label = "last day"
+    elif days_left == 0:
+        days_label = "ends today"
+    else:
+        days_label = f"{days_left}d left"
 
-    col1, col2 = st.columns([2, 1])
+    # Ultra-compact: Everything on one line with thin progress bar
+    st.markdown(f"**📅 This Week:** {total_completed}/{total_target} • {int(overall_percent * 100)}% • {total_remaining} to go • {days_label}")
 
-    with col1:
-        st.metric(
-            "Progress",
-            f"{total_completed}/{total_target}",
-            delta=f"{int(overall_percent * 100)}%"
-        )
-
-    with col2:
-        total_remaining = sum(remaining.values())
-        # Better messaging for last day
-        if days_left == 1:
-            days_label = "Last day!"
-        elif days_left == 0:
-            days_label = "Week ends"
-        else:
-            days_label = f"{days_left} days"
-
-        st.metric(
-            "Remaining",
-            f"{total_remaining} to go",
-            delta=days_label
-        )
-
-    # Overall progress bar (cap at 100% if over target)
+    # Thinner progress bar via custom CSS
+    st.markdown("""
+    <style>
+    .stProgress > div > div > div > div {
+        height: 0.3rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     st.progress(min(overall_percent, 1.0))
+
+    # Get rotation status from weekly_status
+    rotation_status_dict = status.get("rotation_status", {})
 
     # --- Workout Type Progress (COLLAPSED IN COMPACT MODE) ---
     if compact:
         # Compact mode: Show details in expander
         with st.expander("📋 View detailed breakdown by workout type", expanded=False):
-            _render_workout_type_details(completed, targets, remaining, days_left)
+            _render_workout_type_details(completed, targets, remaining, days_left, rotation_status_dict)
     else:
         # Full mode: Show details inline
         st.divider()
         st.markdown("#### Workout Types")
-        _render_workout_type_details(completed, targets, remaining, days_left)
+        _render_workout_type_details(completed, targets, remaining, days_left, rotation_status_dict)
 
 
-def _render_workout_type_details(completed, targets, remaining, days_left):
+def _render_workout_type_details(completed, targets, remaining, days_left, rotation_status_dict=None):
     """
     Helper to render workout type details (used by both compact and full modes).
+
+    Args:
+        completed: Dict of completed counts by type
+        targets: Dict of targets by type
+        remaining: Dict of remaining counts by type
+        days_left: Days remaining in week
+        rotation_status_dict: Dict mapping workout type to rotation status ("behind" | "pending")
     """
+    if rotation_status_dict is None:
+        rotation_status_dict = {}
+
     # Define workout types order
     workout_types = ["Push", "Pull", "Legs", "Upper", "Lower"]
 
@@ -364,7 +387,8 @@ def _render_workout_type_details(completed, targets, remaining, days_left):
                     completed.get(workout_types[i], 0),
                     targets.get(workout_types[i], 0),
                     remaining.get(workout_types[i], 0),
-                    days_left
+                    days_left,
+                    rotation_status_dict.get(workout_types[i])
                 )
         else:
             col1, col2 = st.columns(2)
@@ -376,7 +400,8 @@ def _render_workout_type_details(completed, targets, remaining, days_left):
                     completed.get(workout_types[i], 0),
                     targets.get(workout_types[i], 0),
                     remaining.get(workout_types[i], 0),
-                    days_left
+                    days_left,
+                    rotation_status_dict.get(workout_types[i])
                 )
 
             # Second workout type in row
@@ -387,7 +412,8 @@ def _render_workout_type_details(completed, targets, remaining, days_left):
                         completed.get(workout_types[i + 1], 0),
                         targets.get(workout_types[i + 1], 0),
                         remaining.get(workout_types[i + 1], 0),
-                        days_left
+                        days_left,
+                        rotation_status_dict.get(workout_types[i + 1])
                     )
 
 

@@ -6,7 +6,7 @@ All function signatures remain unchanged for backward compatibility.
 """
 
 from datetime import datetime, date, timedelta
-from typing import Optional
+from typing import Optional, Union
 from src.database import get_supabase_client
 
 
@@ -192,6 +192,121 @@ def update_log(log_id: str, updates: dict) -> bool:
         .execute()
 
     return len(result.data) > 0
+
+
+def update_exercise_weight(
+    log_id: str,
+    exercise_index: int,
+    set_index: Union[int, str],  # Can be int or "all"
+    new_weight: float,
+    reason: Optional[str] = None
+) -> bool:
+    """
+    Update weight for a specific set in an exercise and create audit trail.
+
+    Args:
+        log_id: ID of the workout log to update
+        exercise_index: Index of the exercise in the exercises array (0-based)
+        set_index: Index of the set to update (0-based), or "all" to update all sets
+        new_weight: New weight value in pounds
+        reason: Optional reason for the edit (for audit trail)
+
+    Returns:
+        True if successful, False if log not found or validation failed
+
+    Example:
+        # Update set 2 (index 1) of first exercise (index 0) to 145 lbs
+        success = update_exercise_weight("2024-01-15-001", 0, 1, 145.0, "User correction")
+    """
+    try:
+        sb = get_supabase_client()
+
+        # Fetch the workout log
+        result = sb.table("workout_logs") \
+            .select("*") \
+            .eq("id", log_id) \
+            .execute()
+
+        if not result.data:
+            return False
+
+        log = result.data[0]
+
+        # Check if log is deleted
+        if log.get("deleted", False):
+            return False
+
+        # Validate exercise index
+        exercises = log.get("exercises", [])
+        if exercise_index < 0 or exercise_index >= len(exercises):
+            return False
+
+        exercise = exercises[exercise_index]
+        sets = exercise.get("sets", [])
+
+        if not sets:
+            return False
+
+        # Update weight(s)
+        if set_index == "all":
+            # Update all sets
+            old_weight = sets[0].get("weight_lbs", 0) if sets else 0
+            for s in sets:
+                if "weight_lbs" in s:
+                    s["weight_lbs"] = new_weight
+            set_display = "all sets"
+        else:
+            # Validate set index (must be int here)
+            assert isinstance(set_index, int), "set_index must be int if not 'all'"
+            if set_index < 0 or set_index >= len(sets):
+                return False
+
+            # Update specific set
+            old_weight = sets[set_index].get("weight_lbs", 0)
+            sets[set_index]["weight_lbs"] = new_weight
+            set_display = f"set {set_index + 1}"
+
+        # Update the exercise
+        exercise["sets"] = sets
+        exercises[exercise_index] = exercise
+
+        # Create audit trail entry
+        edit_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "field": f"exercises[{exercise_index}].sets[{set_index if set_index != 'all' else '*'}].weight_lbs",
+            "exercise": exercise.get("name", "Unknown"),
+            "set_number": set_display,
+            "old_value": old_weight,
+            "new_value": new_weight,
+            "reason": reason or "User correction via UI"
+        }
+
+        # Get or create edit_history array
+        edit_history = log.get("edit_history", [])
+        if not isinstance(edit_history, list):
+            edit_history = []
+
+        edit_history.append(edit_entry)
+
+        # Update the log
+        updates = {
+            "exercises": exercises,
+            "edit_history": edit_history,
+            "updated_at": datetime.now().isoformat()
+        }
+
+        result = sb.table("workout_logs") \
+            .update(updates) \
+            .eq("id", log_id) \
+            .execute()
+
+        return len(result.data) > 0
+
+    except Exception as e:
+        # Log error but don't crash
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def delete_log(log_id: str) -> bool:

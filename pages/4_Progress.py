@@ -77,6 +77,7 @@ if stats['total_workouts'] > 0:
     st.info(f"📈 You've logged **{stats['total_workouts']} workout{'s' if stats['total_workouts'] != 1 else ''}** total. Track your progress with personalized insights below.")
 
 if stats['total_workouts'] > 0:
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -91,6 +92,8 @@ if stats['total_workouts'] > 0:
 
     with col3:
         st.metric("This Month", stats['this_month'])
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 else:

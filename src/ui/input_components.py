@@ -48,7 +48,7 @@ def render_number_stepper(
             font-size: 2rem;
             font-weight: 700;
             text-align: center;
-            padding: 12px;
+            padding: var(--spacing-element);
             background: var(--color-bg-tertiary);
             border-radius: 8px;
             border: 2px solid var(--color-border);

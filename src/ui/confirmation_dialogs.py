@@ -55,6 +55,7 @@ def show_delete_confirmation(workout: dict, on_confirm_callback: callable = None
     st.info("💡 Deleted workouts can be recovered for 30 days from the Trash page.")
 
     # Action buttons
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
 
     with col1:
@@ -81,6 +82,8 @@ def show_delete_confirmation(workout: dict, on_confirm_callback: callable = None
                 st.rerun()
             else:
                 st.error("❌ Failed to delete workout. Please try again.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -134,6 +137,7 @@ def show_bulk_delete_confirmation(workouts: list[dict], on_confirm_callback: cal
     st.info("💡 Deleted workouts can be recovered for 30 days from the Trash page.")
 
     # Action buttons
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
 
     with col1:
@@ -169,6 +173,8 @@ def show_bulk_delete_confirmation(workouts: list[dict], on_confirm_callback: cal
                 st.rerun()
             else:
                 st.error("❌ Failed to delete workouts. Please try again.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -222,6 +228,7 @@ def show_permanent_delete_warning(workout: dict, on_confirm_callback: callable =
     confirm = st.checkbox("I understand this action is permanent and cannot be undone")
 
     # Action buttons
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
 
     with col1:
@@ -251,6 +258,8 @@ def show_permanent_delete_warning(workout: dict, on_confirm_callback: callable =
                     st.rerun()
                 else:
                     st.error("❌ Failed to permanently delete workout. Please try again.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -284,6 +293,7 @@ def show_bulk_permanent_delete_warning(workout_count: int, on_confirm_callback: 
     confirm = st.checkbox(f"I understand this will permanently delete {workout_count} workout{'s' if workout_count != 1 else ''}")
 
     # Action buttons
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
 
     with col1:
@@ -317,3 +327,144 @@ def show_bulk_permanent_delete_warning(workout_count: int, on_confirm_callback: 
                     import time
                     time.sleep(1)
                     st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ============================================================================
+# Exercise Weight Edit Confirmation
+# ============================================================================
+
+@st.dialog("Confirm Exercise Edit")
+def show_edit_confirmation(edit_context: dict, on_confirm_callback: callable = None):
+    """
+    Show confirmation dialog for editing exercise weight in a past workout.
+
+    Displays the workout details and allows user to adjust the weight before confirming.
+
+    Args:
+        edit_context: Dict containing:
+            - log_id: Workout log ID
+            - workout_date: Date of the workout
+            - workout_type: Type of workout (Push/Pull/Legs/etc)
+            - exercise_name: Name of the exercise
+            - exercise_index: Index of exercise in exercises array
+            - set_index: Index of set to edit (or "all")
+            - old_weight: Current weight value
+            - new_weight: Proposed new weight value
+            - set_display: Human-readable set description (e.g., "set 2" or "all sets")
+            - total_sets: Total number of sets for this exercise
+        on_confirm_callback: Optional callback to execute after successful edit
+
+    Returns:
+        None (uses st.rerun() to refresh page after action)
+    """
+    # Extract context
+    log_id = edit_context.get('log_id')
+    workout_date = edit_context.get('workout_date', 'Unknown')
+    workout_type = edit_context.get('workout_type', 'Unknown')
+    exercise_name = edit_context.get('exercise_name', 'Unknown')
+    exercise_index = edit_context.get('exercise_index', 0)
+    set_index = edit_context.get('set_index', 0)
+    old_weight = edit_context.get('old_weight', 0)
+    proposed_weight = edit_context.get('new_weight', 0)
+    set_display = edit_context.get('set_display', 'set')
+    total_sets = edit_context.get('total_sets', 1)
+
+    # Format date nicely
+    try:
+        if isinstance(workout_date, str):
+            workout_date_obj = date.fromisoformat(workout_date)
+            formatted_date = workout_date_obj.strftime("%b %d, %Y")
+        else:
+            formatted_date = str(workout_date)
+    except (ValueError, AttributeError):
+        formatted_date = str(workout_date)
+
+    # Show header
+    st.warning("⚠️ Editing historical workout data")
+
+    # Show workout summary
+    st.markdown(f"""
+    **{workout_type}** workout from **{formatted_date}**
+
+    Exercise: **{exercise_name}**
+    Editing: **{set_display}** (out of {total_sets} total sets)
+    """)
+
+    # Editable weight field
+    st.markdown("### New Weight")
+    new_weight = st.number_input(
+        "Weight (lbs)",
+        value=float(proposed_weight),
+        min_value=0.0,
+        max_value=1000.0,
+        step=2.5,
+        help="Enter the correct weight for this exercise"
+    )
+
+    # Show before/after comparison
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Current Weight", f"{old_weight} lbs")
+    with col2:
+        st.metric("New Weight", f"{new_weight} lbs", delta=f"{new_weight - old_weight:+.1f} lbs")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Optional reason field
+    reason = st.text_input(
+        "Reason for edit (optional)",
+        placeholder="e.g., 'Logged wrong weight', 'Typo correction'",
+        help="This will be saved in the audit trail"
+    )
+
+    # Action buttons
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("❌ Cancel", use_container_width=True):
+            # Clear pending edit from session state if it exists
+            if 'pending_edit' in st.session_state:
+                del st.session_state.pending_edit
+            st.rerun()
+
+    with col2:
+        if st.button("✅ Confirm Edit", type="primary", use_container_width=True):
+            # Import here to avoid circular imports
+            from src.data import update_exercise_weight
+
+            try:
+                success = update_exercise_weight(
+                    log_id=log_id,
+                    exercise_index=exercise_index,
+                    set_index=set_index,
+                    new_weight=new_weight,
+                    reason=reason if reason else None
+                )
+
+                if success:
+                    st.success(f"✅ Weight updated to {new_weight} lbs!")
+
+                    # Execute callback if provided
+                    if on_confirm_callback:
+                        on_confirm_callback()
+
+                    # Clear pending edit from session state
+                    if 'pending_edit' in st.session_state:
+                        del st.session_state.pending_edit
+
+                    # Brief pause to show success message
+                    import time
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to update weight. The workout may have been deleted or the data is invalid.")
+
+            except Exception as e:
+                st.error(f"❌ Error updating weight: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+
+    st.markdown('</div>', unsafe_allow_html=True)

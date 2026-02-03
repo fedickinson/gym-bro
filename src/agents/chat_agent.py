@@ -26,6 +26,7 @@ from src.tools.recommend_tools import (
     suggest_next_workout
 )
 from src.tools.session_tools import start_workout_session
+from src.tools.edit_tools import edit_exercise_weight
 
 
 # ============================================================================
@@ -54,6 +55,7 @@ Your tools:
 - get_weekly_split_status: See what's done this week and what's remaining
 - suggest_next_workout: Get AI suggestion based on rotation and weekly targets
 - start_workout_session: Create a workout planning session (use when user wants to start a workout)
+- edit_exercise_weight: Edit/correct a weight in a past workout (use when user wants to change historical data)
 
 **CRITICAL RULES**:
 1. **NEVER guess or make up workout data** - Always use tools for data questions
@@ -186,14 +188,15 @@ class ChatAgent:
         )
 
         # The tools this agent can use
-        # Subset of Query + Recommend tools + Session tools
+        # Subset of Query + Recommend tools + Session tools + Edit tools
         self.tools = [
             search_workouts,
             get_exercise_history,
             calculate_progression,
             get_weekly_split_status,
             suggest_next_workout,
-            start_workout_session
+            start_workout_session,
+            edit_exercise_weight
         ]
 
         # Create the ReAct agent using LangGraph
@@ -254,8 +257,9 @@ class ChatAgent:
             "messages": messages
         })
 
-        # Extract session data if start_workout_session was called
+        # Extract session data and edit context from tool calls
         session_data = None
+        edit_context = None
         tool_calls = []
 
         for message in result["messages"]:
@@ -275,15 +279,21 @@ class ChatAgent:
                     import ast
                     # Safely evaluate the string as a Python literal
                     tool_result = ast.literal_eval(message.content)
-                    if isinstance(tool_result, dict) and tool_result.get('session_data'):
-                        session_data = tool_result['session_data']
+                    if isinstance(tool_result, dict):
+                        if tool_result.get('session_data'):
+                            session_data = tool_result['session_data']
+                        if tool_result.get('edit_context'):
+                            edit_context = tool_result['edit_context']
                 except:
                     # If literal_eval fails, try json.loads
                     try:
                         import json
                         tool_result = json.loads(message.content)
-                        if isinstance(tool_result, dict) and tool_result.get('session_data'):
-                            session_data = tool_result['session_data']
+                        if isinstance(tool_result, dict):
+                            if tool_result.get('session_data'):
+                                session_data = tool_result['session_data']
+                            if tool_result.get('edit_context'):
+                                edit_context = tool_result['edit_context']
                     except:
                         pass
 
@@ -291,6 +301,7 @@ class ChatAgent:
         return {
             "response": result["messages"][-1].content,
             "session_data": session_data,
+            "edit_context": edit_context,
             "tool_calls": tool_calls
         }
 

@@ -68,6 +68,7 @@ with st.sidebar:
         st.subheader("🛠️ Dev Tools")
         st.caption("Debug mode enabled")
 
+        st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
 
         with col1:
@@ -105,6 +106,8 @@ with st.sidebar:
                     mime="text/markdown",
                     use_container_width=True
                 )
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 
@@ -147,6 +150,7 @@ if st.session_state.get('workout_session') and st.session_state.get('chat_initia
     st.success(f"✅ Your {workout_type} workout is ready!")
     st.caption(f"{exercise_count} exercises planned")
 
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
@@ -157,10 +161,12 @@ if st.session_state.get('workout_session') and st.session_state.get('chat_initia
             st.switch_page("pages/1_Log_Workout.py")
 
     # Option to cancel
-    if st.button("❌ Cancel Workout", use_container_width=False):
+    if st.button("❌ Cancel Workout", use_container_width=True):
         from src.ui.session import reset_workout_session
         reset_workout_session()
         st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 
@@ -190,6 +196,7 @@ if user_input := st.chat_input("Ask me anything..."):
 
                 response = result["response"]
                 session_data = result.get("session_data")
+                edit_context = result.get("edit_context")
 
                 # Display response
                 st.write(response)
@@ -199,6 +206,10 @@ if user_input := st.chat_input("Ask me anything..."):
                     st.session_state.workout_session = session_data
                     st.session_state.chat_initiated_workout = True
                     st.session_state.log_state = 'planning_chat'  # Set to planning state
+
+                # If an edit was prepared, store in session state for dialog
+                if edit_context:
+                    st.session_state.pending_edit = edit_context
 
                 # Add assistant message to history with metadata
                 add_chat_message("assistant", response,
@@ -212,6 +223,19 @@ if user_input := st.chat_input("Ask me anything..."):
 
     # Rerun to update display
     st.rerun()
+
+# ============================================================================
+# Edit Confirmation Dialog
+# ============================================================================
+
+# Show edit confirmation dialog if there's a pending edit
+if st.session_state.get("pending_edit"):
+    from src.ui.confirmation_dialogs import show_edit_confirmation
+
+    show_edit_confirmation(
+        st.session_state.pending_edit,
+        on_confirm_callback=lambda: st.session_state.pop("pending_edit", None)
+    )
 
 # ============================================================================
 # Initial Welcome Message

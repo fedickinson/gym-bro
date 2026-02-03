@@ -119,17 +119,18 @@ class GymBroOrchestrator:
         print(f"🎯 Intent: {intent}")
 
         # Step 2: Route to appropriate handler
-        handler_name, response, session_data = self._route_to_handler(intent, user_input, chat_history)
+        handler_name, response, session_data, edit_context = self._route_to_handler(intent, user_input, chat_history)
 
         # Step 3: Return structured result
         return {
             "intent": intent,
             "handler": handler_name,
             "response": response,
-            "session_data": session_data
+            "session_data": session_data,
+            "edit_context": edit_context
         }
 
-    def _route_to_handler(self, intent: str, user_input: str, chat_history: list = None) -> tuple[str, str]:
+    def _route_to_handler(self, intent: str, user_input: str, chat_history: list = None) -> tuple:
         """
         Internal method to route to the correct handler based on intent.
 
@@ -139,27 +140,29 @@ class GymBroOrchestrator:
             chat_history: Optional conversation history for context
 
         Returns:
-            Tuple of (handler_name, response, session_data)
+            Tuple of (handler_name, response, session_data, edit_context)
         """
         try:
             if intent == "chat":
                 result = self.chat_agent.chat(user_input, chat_history=chat_history)
-                # ChatAgent now returns dict with response + session_data
+                # ChatAgent now returns dict with response + session_data + edit_context
                 response = result.get("response") if isinstance(result, dict) else result
-                return ("chat_agent", response, result.get("session_data") if isinstance(result, dict) else None)
+                session_data = result.get("session_data") if isinstance(result, dict) else None
+                edit_context = result.get("edit_context") if isinstance(result, dict) else None
+                return ("chat_agent", response, session_data, edit_context)
 
             elif intent == "query":
                 response = self.query_agent.query(user_input)
-                return ("query_agent", response, None)
+                return ("query_agent", response, None, None)
 
             elif intent == "recommend":
                 response = self.recommend_agent.recommend(user_input)
-                return ("recommend_agent", response, None)
+                return ("recommend_agent", response, None, None)
 
             elif intent == "admin":
                 # For now, just use the delete latest demo
                 response = self.admin_chain.handle_delete_latest()
-                return ("admin_chain", response, None)
+                return ("admin_chain", response, None, None)
 
             elif intent == "log":
                 # Phase 3: LangGraph workout logging!
@@ -170,17 +173,19 @@ class GymBroOrchestrator:
                 # Note: In a real Streamlit app, we'd return the state
                 # and wait for user confirmation. For CLI demo, we auto-approve.
                 # See log_graph.py for full implementation.
-                return ("log_graph", response, None)
+                return ("log_graph", response, None, None)
 
             else:
                 # Fallback to chat for unknown intents
                 result = self.chat_agent.chat(user_input, chat_history=chat_history)
                 response = result.get("response") if isinstance(result, dict) else result
-                return ("chat_agent_fallback", response, result.get("session_data") if isinstance(result, dict) else None)
+                session_data = result.get("session_data") if isinstance(result, dict) else None
+                edit_context = result.get("edit_context") if isinstance(result, dict) else None
+                return ("chat_agent_fallback", response, session_data, edit_context)
 
         except Exception as e:
             # Error handling - return friendly error message
-            return ("error", f"Oops! Something went wrong: {str(e)}", None)
+            return ("error", f"Oops! Something went wrong: {str(e)}", None, None)
 
     def chat(self, user_input: str) -> str:
         """

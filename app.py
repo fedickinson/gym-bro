@@ -95,61 +95,6 @@ render_bottom_nav('Home')
 
 st.markdown(get_global_styles(), unsafe_allow_html=True)
 
-# Additional home-specific styles
-st.markdown("""
-<style>
-/* Huge button for LOG WORKOUT (primary action) */
-.huge-button {
-    padding: 0.5rem 0;
-}
-
-.huge-button > div > div > div > button {
-    min-height: 56px !important;
-    font-size: 1.125rem !important;
-    font-weight: 600 !important;
-    width: 100% !important;
-    border-radius: 12px !important;
-    background: var(--color-accent-gradient) !important;
-    border: none !important;
-}
-
-/* Red delete buttons */
-button[kind="secondary"]:has(p:contains("Delete")),
-button[kind="secondary"]:has(p:contains("🗑️")),
-button:has(p:contains("❌")) {
-    background-color: var(--color-destructive) !important;
-    color: white !important;
-    border: 1px solid var(--color-destructive-hover) !important;
-}
-
-button[kind="secondary"]:has(p:contains("Delete")):hover,
-button[kind="secondary"]:has(p:contains("🗑️")):hover,
-button:has(p:contains("❌")):hover {
-    background-color: var(--color-destructive-hover) !important;
-}
-
-/* X button styling for recent activity - match expander height */
-button:has(p:contains("❌")) {
-    height: 48px !important;
-    min-height: 48px !important;
-    max-height: 48px !important;
-    padding: 0 !important;
-    font-size: 24px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    margin: 0 !important;
-}
-
-/* Desktop optimizations */
-@media (min-width: 769px) {
-    .huge-button > div > div > div > button {
-        min-height: 48px !important;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
-
 # ============================================================================
 # Sidebar Navigation & Stats
 # ============================================================================
@@ -174,6 +119,7 @@ try:
     split_status = get_weekly_split_status.invoke({})
 
     # Create two columns for mobile-friendly layout
+    st.markdown('<div class="weekly-split-section">', unsafe_allow_html=True)
     col1, col2 = st.columns([2, 1])
 
     with col1:
@@ -234,6 +180,7 @@ try:
         delta=f"{abs_count - abs_target}" if abs_count != abs_target else None,
         delta_color=delta_color
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
     st.error(f"Could not load weekly split status: {str(e)}")
@@ -246,21 +193,22 @@ except Exception as e:
 st.header("Quick Actions")
 
 # Huge LOG WORKOUT button (mobile-first priority)
-st.markdown('<div class="huge-button">', unsafe_allow_html=True)
-if st.button("🎙️ LOG WORKOUT", key="log_btn", type="primary"):
+if st.button("🎙️ LOG WORKOUT", key="log_btn", type="primary", use_container_width=True):
     st.switch_page("pages/1_Log_Workout.py")
-st.markdown('</div>', unsafe_allow_html=True)
 
 # Secondary actions
+st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("💬 Chat with Coach", key="chat_btn"):
+    if st.button("💬 Chat with Coach", key="chat_btn", use_container_width=True):
         st.switch_page("pages/2_Chat.py")
 
 with col2:
-    if st.button("📊 View Progress", key="progress_btn"):
+    if st.button("📊 View Progress", key="progress_btn", use_container_width=True):
         st.switch_page("pages/4_Progress.py")
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================================
 # Recent Activity

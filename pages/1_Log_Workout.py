@@ -108,10 +108,39 @@ def render_planning_chat_state():
     Pre-workout planning with AI chat.
     Shows suggested workout type, adaptive template, and chat interface for modifications.
     """
+    # Compact layout class for planning state
+    st.markdown("""
+    <style>
+    /* Compact layout for planning state - uses adaptive spacing from global styles */
+    .planning-layout .streamlit-expanderHeader {
+        padding: var(--spacing-expander);
+        min-height: 48px; /* Minimum touch target */
+    }
+
+    .planning-layout .streamlit-expanderContent {
+        padding: var(--spacing-expander);
+    }
+
+    /* Headers in planning layout */
+    .planning-layout h1,
+    .planning-layout h2,
+    .planning-layout h3 {
+        margin-top: var(--spacing-element);
+        margin-bottom: var(--spacing-element);
+    }
+
+    /* Dividers */
+    .planning-layout hr {
+        margin: var(--spacing-section) 0;
+    }
+    </style>
+    <div class="planning-layout">
+    """, unsafe_allow_html=True)
+
     # Show workout progress
     _render_workout_progress()
 
-    st.title("🤖 Plan Your Workout")
+    st.header("🤖 Plan Your Workout")
 
     # Initialize planning if needed
     if not st.session_state.workout_session:
@@ -125,8 +154,6 @@ def render_planning_chat_state():
     from src.ui.planning_components import render_weekly_progress_summary
     render_weekly_progress_summary(compact=True)
 
-    st.divider()
-
     # === NEW: Combo Mode Detection ===
     combo_mode = session.get('combo_mode', False)
     catch_up_combos = session.get('catch_up_combos', [])
@@ -135,8 +162,6 @@ def render_planning_chat_state():
         # COMBO MODE: Show structured combos
         from src.ui.planning_components import render_catch_up_suggestion
         render_catch_up_suggestion(catch_up_combos)
-
-        st.divider()
 
         # Show ALL templates for today's combo
         planned_templates = session.get('planned_templates', [])
@@ -169,10 +194,8 @@ def render_planning_chat_state():
         ]
         render_catch_up_suggestion(catch_up_combos_fallback)
 
-        st.divider()
-
         # Show single template
-        with st.expander("📋 View Your Plan (tap to expand)", expanded=False):
+        with st.expander("📋 Your Workout Plan", expanded=True):
             from src.ui.planning_components import render_template_preview
             render_template_preview(session.get('planned_template', {}), compact=True)
 
@@ -181,10 +204,8 @@ def render_planning_chat_state():
         st.success(f"**Suggested:** {session.get('suggested_type', 'Push')}")
         st.caption(session.get('suggestion_reason', 'Based on your weekly split'))
 
-        st.divider()
-
-        # Show current template (collapsible, COLLAPSED by default for mobile)
-        with st.expander("📋 View Your Plan (tap to expand)", expanded=False):
+        # Show current template (collapsible, EXPANDED by default for mobile)
+        with st.expander("📋 Your Workout Plan", expanded=True):
             from src.ui.planning_components import render_template_preview, render_equipment_constraints
             render_template_preview(session.get('planned_template', {}), compact=True)
 
@@ -200,109 +221,108 @@ def render_planning_chat_state():
     # Show AI-generated workout summary (after plan, before modify)
     workout_summary = session.get('workout_summary')
     if workout_summary:
-        st.divider()
-        st.markdown("### 💪 Workout Breakdown")
+        # Wrap in expander, collapsed by default to save vertical space
+        with st.expander("💪 View Workout Breakdown (AI summary)", expanded=False):
+            # Parse and format the summary with better visual structure
+            lines = workout_summary.split('\n')
+            focus_statement = None
+            exercise_bullets = []
+            recovery_note = []
 
-        # Parse and format the summary with better visual structure
-        lines = workout_summary.split('\n')
-        focus_statement = None
-        exercise_bullets = []
-        recovery_note = []
+            in_exercises = False
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
 
-        in_exercises = False
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
+                # First bold line is focus statement
+                if line.startswith('**') and not focus_statement:
+                    focus_statement = line
+                # Bullet points are exercises
+                elif line.startswith('•'):
+                    exercise_bullets.append(line)
+                    in_exercises = True
+                # Everything after bullets is recovery
+                elif in_exercises and not line.startswith('•'):
+                    recovery_note.append(line)
+                elif not in_exercises and not line.startswith('**'):
+                    recovery_note.append(line)
 
-            # First bold line is focus statement
-            if line.startswith('**') and not focus_statement:
-                focus_statement = line
-            # Bullet points are exercises
-            elif line.startswith('•'):
-                exercise_bullets.append(line)
-                in_exercises = True
-            # Everything after bullets is recovery
-            elif in_exercises and not line.startswith('•'):
-                recovery_note.append(line)
-            elif not in_exercises and not line.startswith('**'):
-                recovery_note.append(line)
+            # Render with custom styling
+            st.markdown("""
+            <style>
+            .workout-focus {
+                font-size: 1.3rem;
+                font-weight: 600;
+                color: #4CAF50;
+                margin-bottom: 1.5rem;
+                line-height: 1.6;
+            }
+            .workout-focus strong {
+                font-weight: 700;
+            }
+            .exercise-list {
+                background: rgba(255, 255, 255, 0.03);
+                border-radius: 8px;
+                padding: 1.5rem;
+                margin: 1rem 0;
+            }
+            .exercise-item {
+                font-size: 1.1rem;
+                line-height: 1.8;
+                margin-bottom: 1.2rem;
+                padding-left: 0.5rem;
+            }
+            .exercise-item strong {
+                font-weight: 700;
+                font-size: 1.15rem;
+                color: #FFA726;
+            }
+            .exercise-item:last-child {
+                margin-bottom: 0;
+            }
+            .recovery-note {
+                font-size: 1.05rem;
+                line-height: 1.7;
+                margin-top: 1.5rem;
+                padding: 1rem;
+                background: rgba(100, 149, 237, 0.1);
+                border-left: 3px solid #6495ED;
+                border-radius: 4px;
+            }
+            .recovery-note strong {
+                font-weight: 700;
+            }
+            </style>
+            """, unsafe_allow_html=True)
 
-        # Render with custom styling
-        st.markdown("""
-        <style>
-        .workout-focus {
-            font-size: 1.3rem;
-            font-weight: 600;
-            color: #4CAF50;
-            margin-bottom: 1.5rem;
-            line-height: 1.6;
-        }
-        .workout-focus strong {
-            font-weight: 700;
-        }
-        .exercise-list {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin: 1rem 0;
-        }
-        .exercise-item {
-            font-size: 1.1rem;
-            line-height: 1.8;
-            margin-bottom: 1.2rem;
-            padding-left: 0.5rem;
-        }
-        .exercise-item strong {
-            font-weight: 700;
-            font-size: 1.15rem;
-            color: #FFA726;
-        }
-        .exercise-item:last-child {
-            margin-bottom: 0;
-        }
-        .recovery-note {
-            font-size: 1.05rem;
-            line-height: 1.7;
-            margin-top: 1.5rem;
-            padding: 1rem;
-            background: rgba(100, 149, 237, 0.1);
-            border-left: 3px solid #6495ED;
-            border-radius: 4px;
-        }
-        .recovery-note strong {
-            font-weight: 700;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+            # Helper function to convert markdown bold to HTML
+            def convert_bold(text):
+                import re
+                # Replace **text** with <strong>text</strong>
+                return re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
 
-        # Helper function to convert markdown bold to HTML
-        def convert_bold(text):
-            import re
-            # Replace **text** with <strong>text</strong>
-            return re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+            # Render focus statement
+            if focus_statement:
+                focus_html = convert_bold(focus_statement)
+                st.markdown(f'<div class="workout-focus">{focus_html}</div>', unsafe_allow_html=True)
 
-        # Render focus statement
-        if focus_statement:
-            focus_html = convert_bold(focus_statement)
-            st.markdown(f'<div class="workout-focus">{focus_html}</div>', unsafe_allow_html=True)
+            # Render exercise list
+            if exercise_bullets:
+                exercises_html = '<div class="exercise-list">'
+                for bullet in exercise_bullets:
+                    # Remove the bullet character and convert markdown
+                    exercise_text = bullet.replace('•', '').strip()
+                    exercise_html = convert_bold(exercise_text)
+                    exercises_html += f'<div class="exercise-item">• {exercise_html}</div>'
+                exercises_html += '</div>'
+                st.markdown(exercises_html, unsafe_allow_html=True)
 
-        # Render exercise list
-        if exercise_bullets:
-            exercises_html = '<div class="exercise-list">'
-            for bullet in exercise_bullets:
-                # Remove the bullet character and convert markdown
-                exercise_text = bullet.replace('•', '').strip()
-                exercise_html = convert_bold(exercise_text)
-                exercises_html += f'<div class="exercise-item">• {exercise_html}</div>'
-            exercises_html += '</div>'
-            st.markdown(exercises_html, unsafe_allow_html=True)
-
-        # Render recovery note
-        if recovery_note:
-            recovery_text = ' '.join(recovery_note)
-            recovery_html = '<div class="recovery-note">' + convert_bold(recovery_text) + '</div>'
-            st.markdown(recovery_html, unsafe_allow_html=True)
+            # Render recovery note
+            if recovery_note:
+                recovery_text = ' '.join(recovery_note)
+                recovery_html = '<div class="recovery-note">' + convert_bold(recovery_text) + '</div>'
+                st.markdown(recovery_html, unsafe_allow_html=True)
 
     st.divider()
 
@@ -325,6 +345,9 @@ def render_planning_chat_state():
         st.session_state.recording_mode = None  # Reset recording mode for first exercise
         st.session_state.log_state = 'session_exercise_intro'  # Show intro for first exercise
         st.rerun()
+
+    # Close planning layout div
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ============================================================================

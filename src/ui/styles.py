@@ -22,15 +22,21 @@ def get_global_styles():
     """
     return """
     <style>
+    /* CSS Version: 3.0.0 - Mobile UX Refactor */
+    /* Last Updated: 2026-02-02 */
     /* ========================================
        DESIGN TOKENS
        ======================================== */
 
     :root {
+        /* CSS Version (for debugging) */
+        --css-version: "3.0.0";
+
         /* Animation & Transitions */
         --transition-fast: 0.1s ease;
         --transition-normal: 0.2s ease;
         --transition-slow: 0.3s ease;
+
         /* Colors - Primary (Success/Progress) */
         --color-primary-500: #4CAF50;
         --color-primary-600: #45a049;
@@ -61,7 +67,7 @@ def get_global_styles():
         --color-text-secondary: #B0B0B0;
         --color-border: #3A3A3A;
 
-        /* Spacing (8pt grid system) */
+        /* Spacing (8pt grid system) - Base mobile values */
         --space-1: 0.25rem;  /* 4px */
         --space-2: 0.5rem;   /* 8px */
         --space-3: 0.75rem;  /* 12px */
@@ -70,20 +76,56 @@ def get_global_styles():
         --space-6: 2rem;     /* 32px */
         --space-8: 3rem;     /* 48px */
         --space-10: 4rem;    /* 64px */
+
+        /* Adaptive Spacing Tokens (Mobile-first, responsive) */
+        --spacing-button: 0.5rem;      /* 8px between buttons (mobile) */
+        --spacing-section: 1rem;       /* 16px between sections (mobile) */
+        --spacing-element: 0.5rem;     /* 8px between elements (mobile) */
+        --spacing-card: 1rem;          /* 16px card padding (mobile) */
+        --spacing-expander: 0.75rem;   /* 12px expander padding (mobile) */
+
+        /* Breakpoint tokens */
+        --bp-mobile-small: 375px;   /* iPhone SE */
+        --bp-mobile-large: 600px;   /* Large phones */
+        --bp-tablet: 768px;         /* iPad Mini */
+        --bp-desktop: 1024px;       /* Desktop */
+    }
+
+    /* Large phones (600-767px) - Adaptive spacing */
+    @media (min-width: 600px) and (max-width: 767px) {
+        :root {
+            --spacing-button: 0.75rem;   /* 12px on large phones */
+            --spacing-section: 1.5rem;   /* 24px on large phones */
+            --spacing-element: 0.75rem;  /* 12px on large phones */
+            --spacing-card: 1.5rem;      /* 24px on large phones */
+            --spacing-expander: 1rem;    /* 16px on large phones */
+        }
+    }
+
+    /* Desktop (1024px+) - Adaptive spacing */
+    @media (min-width: 1024px) {
+        :root {
+            --spacing-button: 1rem;      /* 16px on desktop */
+            --spacing-section: 2rem;     /* 32px on desktop */
+            --spacing-element: 1rem;     /* 16px on desktop */
+            --spacing-card: 2rem;        /* 32px on desktop */
+            --spacing-expander: 1.25rem; /* 20px on desktop */
+        }
     }
 
     /* ========================================
        TYPOGRAPHY SCALE
        ======================================== */
 
+    /* Typography - Mobile first, scales up */
     .text-display {
-        font-size: 2.5rem;      /* 40px mobile */
+        font-size: 2rem;        /* 32px mobile */
         font-weight: 700;
         line-height: 1.2;
     }
 
     .text-h1 {
-        font-size: 2rem;        /* 32px mobile */
+        font-size: 1.75rem;     /* 28px mobile */
         font-weight: 700;
         line-height: 1.3;
     }
@@ -107,7 +149,7 @@ def get_global_styles():
     }
 
     .text-body {
-        font-size: 1rem;        /* 16px */
+        font-size: 1rem;        /* 16px - minimum readable */
         font-weight: 400;
         line-height: 1.6;
     }
@@ -122,6 +164,21 @@ def get_global_styles():
         font-size: 0.75rem;     /* 12px */
         font-weight: 400;
         line-height: 1.4;
+    }
+
+    /* Large phones (600-767px) - Typography scaling */
+    @media (min-width: 600px) and (max-width: 767px) {
+        .text-display { font-size: 2.5rem; }    /* 40px */
+        .text-h1 { font-size: 2rem; }           /* 32px */
+        .text-h2 { font-size: 1.625rem; }       /* 26px */
+    }
+
+    /* Desktop (1024px+) - Typography scaling */
+    @media (min-width: 1024px) {
+        .text-display { font-size: 3rem; }      /* 48px */
+        .text-h1 { font-size: 2.5rem; }         /* 40px */
+        .text-h2 { font-size: 1.75rem; }        /* 28px */
+        .text-emphasis { font-size: 1.25rem; }  /* 20px */
     }
 
     /* Phase 2: Exercise detail prominence (for summaries/review screens) */
@@ -193,10 +250,10 @@ def get_global_styles():
         outline-offset: 2px;
     }
 
-    /* Cards */
+    /* Cards - Adaptive padding */
     .card {
         background: var(--color-bg-secondary);
-        padding: var(--space-5);
+        padding: var(--spacing-card);
         border-radius: 12px;
         border: 1px solid var(--color-border);
     }
@@ -572,14 +629,20 @@ def get_global_styles():
        STREAMLIT OVERRIDES
        ======================================== */
 
-    /* Reduce Streamlit's default spacing */
+    /* Adaptive spacing for elements - follows 8px minimum */
     .element-container {
-        margin-bottom: var(--space-3) !important;
+        margin-bottom: var(--spacing-element);
     }
 
-    /* Improve button styling */
+    /* Button spacing - responsive, no forced overrides */
+    .stButton {
+        margin-bottom: var(--spacing-button);
+    }
+
     .stButton > button {
         width: 100%;
+        padding: 0.5rem 1rem;
+        min-height: 48px; /* iOS HIG minimum touch target */
     }
 
     /* Number input styling (apply large workout input styles) */
@@ -786,6 +849,20 @@ def get_global_styles():
         }
     }
 
+    /* Weekly split section (Home page) - mobile stacking */
+    @media (max-width: 768px) {
+        .weekly-split-section [data-testid="column"] {
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+            margin-bottom: var(--space-3);
+        }
+    }
+
+    /* Ensure buttons in expanders meet touch target minimum */
+    .streamlit-expanderContent .stButton > button {
+        min-height: 48px;
+    }
+
     /* Mobile-only filter UI (show on mobile, hide on desktop) */
     .mobile-filters {
         display: none;
@@ -808,6 +885,25 @@ def get_global_styles():
     @media (max-width: 768px) {
         .desktop-only {
             display: none !important;
+        }
+    }
+
+    /* ========================================
+       iOS SAFE AREAS (notch, home indicator)
+       ======================================== */
+
+    /* Safe area support for iOS devices */
+    @supports (padding: max(0px)) {
+        .main .block-container {
+            padding-top: max(1rem, env(safe-area-inset-top));
+            padding-right: max(1rem, env(safe-area-inset-right));
+            padding-bottom: max(5rem, calc(5rem + env(safe-area-inset-bottom)));
+            padding-left: max(1rem, env(safe-area-inset-left));
+        }
+
+        .nav-container,
+        .bottom-nav {
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
         }
     }
 

@@ -30,47 +30,54 @@ def render_bottom_nav(current_page: str):
     ]
 
     # Use columns to create the bottom nav layout
-    # We'll style them to look like the fixed bottom nav with CSS
+    # Styles are defined in src/ui/styles.py - no inline CSS overrides
     st.markdown("""
     <style>
-    /* Override for navigation buttons to look like nav items */
+    /* Navigation Button Overrides (use adaptive spacing, no !important) */
+    div[data-testid="column"] {
+        padding: 0;
+        margin: 0;
+    }
+
+    /* Navigation buttons styled as nav items */
     div[data-testid="column"] > div > div > div > button[kind="secondary"] {
-        background: transparent !important;
-        border: none !important;
-        color: var(--color-text-secondary) !important;
-        min-height: 60px !important;
-        padding: 8px 4px !important;
-        font-size: 0.75rem !important;
+        background: transparent;
+        border: none;
+        color: var(--color-text-secondary);
+        min-height: 50px; /* Above iOS 44pt minimum */
+        padding: var(--spacing-element) 0.25rem; /* Adaptive spacing - Apple HIG compliant */
+        font-size: 0.75rem;
+        margin: 0;
     }
 
     div[data-testid="column"] > div > div > div > button[kind="secondary"]:hover {
-        background: var(--color-bg-tertiary) !important;
-        color: var(--color-text-primary) !important;
+        background: var(--color-bg-tertiary);
+        color: var(--color-text-primary);
     }
 
-    /* PRIMARY action button (Log) - larger and emphasized */
+    /* PRIMARY action button (Log) - emphasized */
     div[data-testid="column"]:nth-child(2) > div > div > div > button[kind="secondary"] {
-        font-size: 0.875rem !important;
-        font-weight: 600 !important;
-        color: var(--color-primary-500) !important;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--color-primary-500);
     }
 
     div[data-testid="column"]:nth-child(2) > div > div > div > button[kind="secondary"]:hover {
-        background: rgba(76, 175, 80, 0.1) !important;
-        color: var(--color-primary-500) !important;
+        background: rgba(76, 175, 80, 0.1);
+        color: var(--color-primary-500);
     }
 
     /* SECONDARY primary action button (Chat) - slightly emphasized */
     div[data-testid="column"]:nth-child(3) > div > div > div > button[kind="secondary"] {
-        font-size: 0.8125rem !important;
-        font-weight: 500 !important;
+        font-size: 0.8125rem;
+        font-weight: 500;
     }
 
     div[data-testid="column"]:nth-child(3) > div > div > div > button[kind="secondary"]:hover {
-        background: rgba(76, 175, 80, 0.05) !important;
+        background: rgba(76, 175, 80, 0.05);
     }
 
-    /* Container for bottom nav */
+    /* Container for bottom nav - uses adaptive spacing */
     .nav-container {
         position: fixed;
         bottom: 0;
@@ -80,13 +87,19 @@ def render_bottom_nav(current_page: str):
         border-top: 1px solid var(--color-border);
         box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
         z-index: 999;
-        padding: 0;
+        padding: var(--spacing-element) 0;
+        margin: 0;
+    }
+
+    /* Add padding to main content to account for fixed nav */
+    .main {
+        padding-bottom: 70px;
     }
 
     /* Hide on desktop */
     @media (min-width: 769px) {
         .nav-container {
-            display: none !important;
+            display: none;
         }
     }
     </style>
@@ -112,13 +125,19 @@ def render_bottom_nav(current_page: str):
                 st.markdown(f"""
                 <div style="
                     text-align: center;
-                    padding: 8px 4px;
+                    padding: var(--spacing-element) 0.25rem;
+                    min-height: 50px;
                     color: var(--color-primary-500);
                     border-top: 3px solid var(--color-primary-500);
                     background: {bg_color};
                     font-weight: {font_weight};
+                    margin: 0;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
                 ">
-                    <div style="font-size: 24px; margin-bottom: 2px;">{item["icon"]}</div>
+                    <div style="font-size: 20px; margin-bottom: var(--space-1);">{item["icon"]}</div>
                     <div style="font-size: {font_size};">{item["label"]}</div>
                 </div>
                 """, unsafe_allow_html=True)

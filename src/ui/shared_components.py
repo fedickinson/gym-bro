@@ -81,6 +81,22 @@ def render_sidebar_navigation(current_page: str):
 
     Note: Log and Chat intentionally omitted from sidebar (use bottom nav on mobile)
     """
+    # Sidebar button styling - uses adaptive spacing from global styles
+    st.markdown("""
+    <style>
+    /* Sidebar navigation - desktop context */
+    section[data-testid="stSidebar"] .stButton > button {
+        margin-bottom: var(--spacing-element);
+        padding: 0.5rem 1rem;
+        min-height: 44px;
+    }
+
+    section[data-testid="stSidebar"] .stButton {
+        margin-bottom: var(--spacing-element);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.subheader("Quick Links")
 
     # Home button (hidden when on home page)

@@ -302,17 +302,170 @@ try:
 
                     # Action buttons
                     st.divider()
-                    col1, col2 = st.columns(2)
+                    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
+                    col1, col2, col3 = st.columns(3)
 
                     with col1:
+                        if st.button("✏️ Edit", key=f"edit_{workout_id}"):
+                            # Store workout in session state for edit dialog
+                            st.session_state.editing_workout = log
+                            st.rerun()
+
+                    with col2:
                         if st.button("🗑️ Delete", key=f"delete_{workout_id}"):
                             # Show confirmation dialog
                             show_delete_confirmation(log)
 
-                    with col2:
+                    with col3:
                         st.caption(f"ID: {workout_id}")
+
+                    st.markdown('</div>', unsafe_allow_html=True)
 
             st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
     st.error(f"Error loading workouts: {str(e)}")
+
+# ============================================================================
+# Edit Dialog
+# ============================================================================
+
+# Show workout edit dialog if a workout is being edited
+if st.session_state.get("editing_workout"):
+    @st.dialog("Edit Workout")
+    def show_workout_edit_dialog(workout: dict):
+        """
+        Show dialog for editing exercise weights in a workout.
+
+        User selects exercise and set, then enters new weight.
+        """
+        from src.data import update_exercise_weight
+
+        st.info("Select the exercise and set to edit:")
+
+        # Extract workout info
+        workout_id = workout.get('id')
+        workout_date = workout.get('date', 'Unknown')
+        workout_type = workout.get('type', 'Unknown')
+        exercises = workout.get('exercises', [])
+
+        if not exercises:
+            st.warning("This workout has no exercises to edit.")
+            if st.button("Close"):
+                del st.session_state.editing_workout
+                st.rerun()
+            return
+
+        # Display workout summary
+        st.markdown(f"**{workout_type}** from **{workout_date}**")
+        st.divider()
+
+        # Exercise selector
+        exercise_options = [f"{i+1}. {ex.get('name', 'Unknown')}" for i, ex in enumerate(exercises)]
+        selected_exercise_str = st.selectbox(
+            "Select Exercise",
+            exercise_options,
+            key="edit_exercise_select"
+        )
+
+        # Extract index from selection (e.g., "1. Bench Press" -> 0)
+        exercise_index = int(selected_exercise_str.split('.')[0]) - 1
+        selected_exercise = exercises[exercise_index]
+        exercise_name = selected_exercise.get('name', 'Unknown')
+
+        # Set selector
+        sets = selected_exercise.get('sets', [])
+        if not sets:
+            st.warning(f"**{exercise_name}** has no sets to edit.")
+        else:
+            # Create set options with current weights
+            set_options = []
+            for i, s in enumerate(sets):
+                weight = s.get('weight_lbs')
+                reps = s.get('reps', '?')
+                if weight is not None:
+                    set_options.append(f"Set {i+1}: {reps} reps @ {weight} lbs")
+                else:
+                    set_options.append(f"Set {i+1}: {reps} reps (bodyweight)")
+
+            # Add "All sets" option if multiple sets with weights
+            weights = [s.get('weight_lbs') for s in sets if s.get('weight_lbs') is not None]
+            if len(weights) > 1:
+                set_options.append("All sets")
+
+            selected_set_str = st.selectbox(
+                "Select Set",
+                set_options,
+                key="edit_set_select"
+            )
+
+            # Determine set index
+            if "All sets" in selected_set_str:
+                set_index = "all"
+                old_weight = sets[0].get('weight_lbs', 0) if sets else 0
+            else:
+                set_index = int(selected_set_str.split(':')[0].split(' ')[1]) - 1
+                old_weight = sets[set_index].get('weight_lbs', 0)
+
+            # Weight input
+            st.markdown("### New Weight")
+            new_weight = st.number_input(
+                "Weight (lbs)",
+                value=float(old_weight),
+                min_value=0.0,
+                max_value=1000.0,
+                step=2.5,
+                key="edit_weight_input"
+            )
+
+            # Show change
+            if new_weight != old_weight:
+                delta = new_weight - old_weight
+                st.metric("Change", f"{delta:+.1f} lbs", delta=f"{delta:+.1f}")
+
+            # Optional reason
+            reason = st.text_input(
+                "Reason for edit (optional)",
+                placeholder="e.g., 'Logged wrong weight'",
+                key="edit_reason_input"
+            )
+
+            # Action buttons
+            st.divider()
+            st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("❌ Cancel", use_container_width=True):
+                    del st.session_state.editing_workout
+                    st.rerun()
+
+            with col2:
+                if st.button("✅ Save", type="primary", use_container_width=True):
+                    try:
+                        success = update_exercise_weight(
+                            log_id=workout_id,
+                            exercise_index=exercise_index,
+                            set_index=set_index,
+                            new_weight=new_weight,
+                            reason=reason if reason else None
+                        )
+
+                        if success:
+                            st.success(f"✅ Weight updated to {new_weight} lbs!")
+                            del st.session_state.editing_workout
+
+                            # Brief pause to show success
+                            import time
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to update weight. The workout may have been deleted.")
+
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # Show the dialog
+    show_workout_edit_dialog(st.session_state.editing_workout)
