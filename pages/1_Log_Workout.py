@@ -524,27 +524,27 @@ def render_session_exercise_intro():
     </div>
     """, unsafe_allow_html=True)
 
-    # Exercise information (muscle groups, equipment, category) - Phase 2: larger text
+    # Exercise information (muscle groups, equipment, category) - Condensed for mobile
     if exercise_info.get('found_in_catalog'):
         st.markdown("### 🎯 Exercise Details")
 
+        # Condensed 2-column layout for mobile
         info_col1, info_col2 = st.columns(2)
 
         with info_col1:
             muscle_groups = exercise_info.get('muscle_groups', [])
             if muscle_groups:
                 st.markdown("**Targets:**")
-                for muscle in muscle_groups:
-                    st.markdown(f"• {muscle}")
+                # Inline comma-separated instead of bullet list
+                st.markdown(", ".join(muscle_groups))
 
-        with info_col2:
             equipment = exercise_info.get('equipment', [])
-            category = exercise_info.get('category', '').title()
-
             if equipment:
                 st.markdown("**Equipment:**")
                 st.markdown(", ".join(equipment))
 
+        with info_col2:
+            category = exercise_info.get('category', '').title()
             if category:
                 st.markdown("**Type:**")
                 st.markdown(f"{category}")
@@ -557,21 +557,60 @@ def render_session_exercise_intro():
 
         st.divider()
 
-    # Plan summary
+    # Plan summary - Compact 2x2 grid for mobile
     st.subheader("📋 Workout Plan")
 
-    plan_col1, plan_col2 = st.columns(2)
+    # Use custom compact layout instead of st.metric for less vertical space
+    st.markdown("""
+    <style>
+    .workout-plan-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-3);
+        margin-bottom: var(--space-4);
+    }
+    .plan-item {
+        background: var(--color-bg-secondary);
+        padding: var(--space-3);
+        border-radius: 8px;
+        border: 1px solid var(--color-border);
+    }
+    .plan-label {
+        font-size: 0.875rem;
+        color: var(--color-text-secondary);
+        margin-bottom: var(--space-1);
+    }
+    .plan-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--color-primary-500);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    with plan_col1:
-        st.metric("Sets", f"{target_sets} sets")
-        st.metric("Reps per Set", f"{target_reps} reps")
+    # 2x2 compact grid
+    weight_display = f"{suggested_weight:.0f} lbs" if suggested_weight else "Choose your weight"
 
-    with plan_col2:
-        if suggested_weight:
-            st.metric("Suggested Weight", f"{suggested_weight:.0f} lbs")
-        else:
-            st.metric("Weight", "Choose your weight")
-        st.metric("Rest Between Sets", f"{rest_seconds}s")
+    st.markdown(f"""
+    <div class="workout-plan-grid">
+        <div class="plan-item">
+            <div class="plan-label">Sets</div>
+            <div class="plan-value">{target_sets}</div>
+        </div>
+        <div class="plan-item">
+            <div class="plan-label">Reps per Set</div>
+            <div class="plan-value">{target_reps}</div>
+        </div>
+        <div class="plan-item">
+            <div class="plan-label">Suggested Weight</div>
+            <div class="plan-value">{weight_display}</div>
+        </div>
+        <div class="plan-item">
+            <div class="plan-label">Rest Between Sets</div>
+            <div class="plan-value">{rest_seconds}s</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -591,7 +630,8 @@ def render_session_exercise_intro():
     st.divider()
     st.caption("Other Options:")
 
-    # Secondary options (3 columns)
+    # Secondary options (3 columns) - wrapped for mobile stacking
+    st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
     opt_col1, opt_col2, opt_col3 = st.columns(3)
 
     with opt_col1:
@@ -623,12 +663,15 @@ def render_session_exercise_intro():
                 st.session_state.confirm_cancel_session = True
                 st.rerun()
 
+    st.markdown('</div>', unsafe_allow_html=True)
+
     # Show skip confirmation if flag is set
     if st.session_state.get('confirm_skip_exercise'):
         st.divider()
         st.warning(f"⚠️ **Skip {exercise_name}?**")
         st.caption("This exercise will not be logged.")
 
+        st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
         skip_col1, skip_col2 = st.columns(2)
         with skip_col1:
             if st.button("Yes, Skip It", key="confirm_skip_yes", type="primary", use_container_width=True):
@@ -657,12 +700,15 @@ def render_session_exercise_intro():
                 st.session_state.confirm_skip_exercise = False
                 st.rerun()
 
+        st.markdown('</div>', unsafe_allow_html=True)
+
     # Show cancel confirmation if flag is set
     if st.session_state.get('confirm_cancel_session'):
         st.divider()
         st.warning("⚠️ **Cancel entire workout session?**")
         st.caption("All progress will be lost.")
 
+        st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
         conf_col1, conf_col2 = st.columns(2)
         with conf_col1:
             if st.button("Yes, Cancel Session", key="confirm_cancel_yes", type="primary", use_container_width=True):
@@ -674,6 +720,8 @@ def render_session_exercise_intro():
             if st.button("No, Continue", key="confirm_cancel_no", use_container_width=True):
                 st.session_state.confirm_cancel_session = False
                 st.rerun()
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_session_active_state():
