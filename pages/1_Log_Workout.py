@@ -524,30 +524,36 @@ def render_session_exercise_intro():
     </div>
     """, unsafe_allow_html=True)
 
-    # Exercise information (muscle groups, equipment, category) - Condensed for mobile
+    # Exercise information (muscle groups, equipment, category) - Ultra-compact grid
     if exercise_info.get('found_in_catalog'):
         st.markdown("### 🎯 Exercise Details")
 
-        # Condensed 2-column layout for mobile
-        info_col1, info_col2 = st.columns(2)
+        # Get data
+        muscle_groups = exercise_info.get('muscle_groups', [])
+        equipment = exercise_info.get('equipment', [])
+        category = exercise_info.get('category', '').title()
 
-        with info_col1:
-            muscle_groups = exercise_info.get('muscle_groups', [])
-            if muscle_groups:
-                st.markdown("**Targets:**")
-                # Inline comma-separated instead of bullet list
-                st.markdown(", ".join(muscle_groups))
+        targets_text = ", ".join(muscle_groups) if muscle_groups else "N/A"
+        equipment_text = ", ".join(equipment) if equipment else "N/A"
+        type_text = category if category else "N/A"
 
-            equipment = exercise_info.get('equipment', [])
-            if equipment:
-                st.markdown("**Equipment:**")
-                st.markdown(", ".join(equipment))
-
-        with info_col2:
-            category = exercise_info.get('category', '').title()
-            if category:
-                st.markdown("**Type:**")
-                st.markdown(f"{category}")
+        # Ultra-compact grid matching Workout Plan style
+        st.markdown(f"""
+        <div class="workout-plan-grid" style="grid-template-columns: 1fr;">
+            <div class="plan-item">
+                <div class="plan-label">Targets</div>
+                <div class="plan-value" style="font-size: 1rem; font-weight: 600;">{targets_text}</div>
+            </div>
+            <div class="plan-item">
+                <div class="plan-label">Equipment</div>
+                <div class="plan-value" style="font-size: 1rem; font-weight: 600;">{equipment_text}</div>
+            </div>
+            <div class="plan-item">
+                <div class="plan-label">Type</div>
+                <div class="plan-value" style="font-size: 1rem; font-weight: 600;">{type_text}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         # First-time beginner guidance
         if exercise_info.get('is_first_time'):
