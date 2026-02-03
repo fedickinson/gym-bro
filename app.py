@@ -196,7 +196,7 @@ st.header("Quick Actions")
 if st.button("🎙️ LOG WORKOUT", key="log_btn", type="primary", use_container_width=True):
     st.switch_page("pages/1_Log_Workout.py")
 
-# Secondary actions
+# Secondary actions (all navigation)
 st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 
@@ -205,8 +205,21 @@ with col1:
         st.switch_page("pages/2_Chat.py")
 
 with col2:
+    if st.button("📅 View History", key="history_btn", use_container_width=True):
+        st.switch_page("pages/3_History.py")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="action-button-row">', unsafe_allow_html=True)
+col1, col2 = st.columns(2)
+
+with col1:
     if st.button("📊 View Progress", key="progress_btn", use_container_width=True):
         st.switch_page("pages/4_Progress.py")
+
+with col2:
+    if st.button("🗑️ View Trash", key="trash_btn", use_container_width=True):
+        st.switch_page("pages/5_Trash.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
 

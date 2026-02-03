@@ -67,19 +67,16 @@ def render_sidebar_stats():
 
 def render_sidebar_navigation(current_page: str):
     """
-    Render standardized sidebar navigation section.
+    Render simplified sidebar navigation - just Home button.
 
     Args:
         current_page: Name of current page ('Home', 'Log', 'Chat', 'History', 'Progress', 'Trash')
-                     Used to hide the current page's button (prevent redundant navigation)
+                     Used to hide the Home button when already on home page
 
-    Navigation Links:
-    - Home (🏠)
-    - History (📅)
-    - Progress (📊)
-    - Trash (🗑️)
-
-    Note: Log and Chat intentionally omitted from sidebar (use bottom nav on mobile)
+    Navigation:
+    - Home button only (all other navigation happens from Home page)
+    - Saves vertical space on mobile
+    - Cleaner, less cluttered sidebar
     """
     # Sidebar button styling - uses adaptive spacing from global styles
     st.markdown("""
@@ -97,26 +94,10 @@ def render_sidebar_navigation(current_page: str):
     </style>
     """, unsafe_allow_html=True)
 
-    st.subheader("Quick Links")
-
-    # Home button (hidden when on home page)
+    # Only show Home button when not on home page
     if current_page != 'Home':
         if st.button("🏠 Home", key=f"sidebar_{current_page.lower()}_home", use_container_width=True):
             st.switch_page("app.py")
-
-    # History button (hidden when on history page)
-    if current_page != 'History':
-        if st.button("📅 View History", key=f"sidebar_{current_page.lower()}_history", use_container_width=True):
-            st.switch_page("pages/3_History.py")
-
-    # Progress button (hidden when on progress page)
-    if current_page != 'Progress':
-        if st.button("📊 View Progress", key=f"sidebar_{current_page.lower()}_progress", use_container_width=True):
-            st.switch_page("pages/4_Progress.py")
-
-    # Trash button (always shown - not a primary page)
-    if st.button("🗑️ View Trash", key=f"sidebar_{current_page.lower()}_trash", use_container_width=True):
-        st.switch_page("pages/5_Trash.py")
 
 
 def render_sidebar_header():
